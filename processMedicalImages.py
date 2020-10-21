@@ -93,9 +93,6 @@ def getSingleDataExample(imgPathName):
     if (os.path.isfile(imgPathName) is False):
         print("File not found.")
         return -1
-    #if (label is None):
-    #    print("No label specified")
-    #    return -1
     try:
         img = nib.load(imgPathName)
     except:
@@ -111,8 +108,6 @@ def getSingleDataExample(imgPathName):
     slice_1 = data[:, 120, :]
     slice_2 = data[:, :, 77]
     #pca(slice_2)
-
-    featureStandardization(slice_0)
 
     slice_0_cropped = crop(slice_0)
     slice_1_cropped = crop(slice_1)
@@ -149,9 +144,10 @@ def getSingleDataExample(imgPathName):
 
     features = slice_2
     features = featureStandardization(features)
+    #   np.savetxt("test.csv", features, delimiter=",")
     return features
 
 
-test = getSingleDataExample(
-    "/home/jokubas/DevWork/3rdYearProject/data/HGG/BraTS19_2013_2_1/BraTS19_2013_2_1_flair.nii.gz"
-)
+#testHGG = getSingleDataExample(
+#    "/home/jokubas/DevWork/3rdYearProject/data/HGG/BraTS19_2013_2_1/BraTS19_2013_2_1_flair.nii.gz"
+#)

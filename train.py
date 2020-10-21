@@ -3,13 +3,16 @@ import numpy as np
 import torch
 from torch import optim
 import torchvision.transforms as transforms
-from classes import Dataset, LogisticRegression
+from classes import Dataset, logisticRegression
 import matplotlib.pyplot as plt
 from utils import getImagePaths
+from sklearn.linear_model import LogisticRegression
 
 
 # 60% training, 20% validation, 20% test
 # Need to ensure that the training set has enough LGG data for classification?
+# Also I shuffle the paths always. This might not be desirable,
+# Because It is not possible to reproduce.
 def createPartition():
     partition = dict()
     imagePaths = getImagePaths(MRIsequence="flair", shuffle="yes")
@@ -42,9 +45,9 @@ def createLabels():
     for path in imagePaths:
         dataClass = path.split(sep="/")[6]
         if dataClass == "HGG":
-            labels[path] = 1
+            labels[path] = 1.0
         elif dataClass == "LGG":
-            labels[path] = 0
+            labels[path] = 0.0
         else:
             print("createLabel. No such class exists. HGG or LGG")
             return -1
@@ -54,7 +57,7 @@ def createLabels():
 
 def get_model(n_input_features):
     lr = 0.001
-    model = LogisticRegression(n_input_features)
+    model = logisticRegression(n_input_features)
     loss_func = torch.nn.BCELoss()
     opt = optim.SGD(model.parameters(), lr=lr)
     return loss_func, model, opt
@@ -68,7 +71,7 @@ def train():
     torch.backends.cudnn.benchmark = True
 
     # Parameters
-    params = {'batch_size': 24, 'shuffle': True, 'num_workers': 6}
+    params = {'batch_size': 10, 'shuffle': True, 'num_workers': 6}
     max_epochs = 100
 
     # Datasets
@@ -93,6 +96,7 @@ def train():
     validation_generator = torch.utils.data.DataLoader(validation_set,
                                                        **params)
     testing_generator = torch.utils.data.DataLoader(test_set, **params)
+
     # Create a model
     loss_func, model, opt = get_model(n_input_features)
 
@@ -105,7 +109,6 @@ def train():
                 device), local_labels.to(device)
 
             local_labels = local_labels.view(-1, 1).float()
-            local_batch = local_batch.float()
 
             # Model computations
             labels_predicted = model(local_batch)
@@ -119,18 +122,55 @@ def train():
 
         # Validation
         with torch.set_grad_enabled(False):
+            prediction_correct = 0
+            prediction_incorrect = 0
             for local_batch, local_labels in validation_generator:
                 # Transfer to GPU
                 local_batch, local_labels = local_batch.to(
                     device), local_labels.to(device)
 
                 # Model computations
-                labels_predicted = model(local_batch.float())
+                labels_predicted = model(local_batch)
                 predicted_class = labels_predicted.round()
+
+                if (predicted_class.eq(local_labels).item() is True):
+                    prediction_correct = prediction_correct + 1
+                else:
+                    prediction_incorrect = prediction_incorrect + 1
                 acc = predicted_class.eq(local_labels).sum() / float(
                     local_labels.shape[0])
+                acc = prediction_correct / (prediction_correct +
+                                            prediction_incorrect)
 
-        print(f'accuracy = {acc:.4f}')
+            if (epoch + 1) % 10 == 0:
+                print(f'epoch {epoch+1}, accuracy = {acc*100:.4f}%')
 
 
+#Suplottint loss.
 train()
+
+
+def train2():
+    X = list()
+    Y = list()
+    for local_batch, local_labels in training_generator:
+        X.append(np.array(local_batch)[0])
+        Y.append(np.array(local_labels)[0])
+    X = np.array(X)
+    Y = np.array(Y)
+    clf = LogisticRegression(random_state=0, max_iter=1000).fit(X, Y)
+    a = clf.score(X, Y)
+    print(a)
+
+    O = list()
+    Z = list()
+    for local_batch, local_labels in validation_generator:
+        O.append(np.array(local_batch)[0])
+        Z.append(np.array(local_labels)[0])
+    O = np.array(O)
+    Z = np.array(Z)
+    print(clf.predict(O))
+    print(Z)
+    a = clf.score(O, Z)
+    print(a)
+    print(clf.coef_.shape)

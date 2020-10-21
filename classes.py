@@ -28,9 +28,9 @@ class Dataset(torch.utils.data.Dataset):
         return X, y
 
 
-class LogisticRegression(nn.Module):
+class logisticRegression(nn.Module):
     def __init__(self, n_input_features):
-        super(LogisticRegression, self).__init__()
+        super(logisticRegression, self).__init__()
         self.linear = nn.Linear(n_input_features, 1)
 
     def forward(self, xb):
