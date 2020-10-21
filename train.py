@@ -2,127 +2,62 @@ import os
 import numpy as np
 import torch
 from torch import optim
+import torchvision.transforms as transforms
 from classes import Dataset, LogisticRegression
-
-projectPathName = os.path.dirname(os.path.abspath(__file__))
-dataPathName = os.path.join(projectPathName, "data")
-HGGPathName = os.path.join(dataPathName, "HGG")
-LGGPathName = os.path.join(dataPathName, "LGG")
-
-if (os.path.isdir(dataPathName) is False):
-    sys.exit("./data folder does not exist within project folder.")
-if (os.path.isdir(HGGPathName) is False
-        or os.path.isdir(LGGPathName) is False):
-    sys.exit("Incorrect format of the project /data folder.")
+import matplotlib.pyplot as plt
+from utils import getImagePaths
 
 
-#Get HGG or LGG NIFTI image archive paths and sort them in lists
-#Flair, seg, t1, t1ce and t2 in seperate lists
-#pathName - absolute or relative path to HGG or LGG folder
-#MRIsequence - possible MRI sequences. "all" - returns all sequences, t1 returns only t1.
-#possible sequences: all, flair, seg, t1, t1ce, t2
-#returns either all lists or a certain list
-def getImagePaths(pathName, MRIsequence="all"):
-    if (pathName != HGGPathName and pathName != LGGPathName):
-        print("Invalid path. Give the path to HGG or LGG data.")
-        return -1
-
-    flair = list()
-    seg = list()
-    t1 = list()
-    t1ce = list()
-    t2 = list()
-
-    for idx, x in enumerate(os.walk(pathName)):
-        #Skip the parent directory given by os.walk in first iteration
-        if (idx == 0):
-            continue
-        imageFolder = x[0]
-        files = sorted([
-            f for f in os.listdir(imageFolder)
-            if os.path.isfile(os.path.join(imageFolder, f))
-        ])
-        flair.append(os.path.join(imageFolder, files[0]))
-        seg.append(os.path.join(imageFolder, files[1]))
-        t1.append(os.path.join(imageFolder, files[2]))
-        t1ce.append(os.path.join(imageFolder, files[3]))
-        t2.append(os.path.join(imageFolder, files[4]))
-
-    if (MRIsequence == "all"):
-        return (flair, seg, t1, t1ce, t2)
-    elif (MRIsequence == "flair" or MRIsequence == "Flair"):
-        return flair
-    elif (MRIsequence == "seg" or MRIsequence == "Seg"):
-        return seg
-    elif (MRIsequence == "t1" or MRIsequence == "T1"):
-        return t1
-    elif (MRIsequence == "t1ce" or MRIsequence == "T1ce"
-          or MRIsequence == "T1CE"):
-        return t1ce
-    elif (MRIsequence == "t2" or MRIsequence == "T2"):
-        return t2
-    else:
-        print(
-            "Invalid MRI sequence NIFTI image. Possible MRI sequences: flair, seg, t1, t1ce, t2"
-        )
-        return -1
-
-
+# 60% training, 20% validation, 20% test
+# Need to ensure that the training set has enough LGG data for classification?
 def createPartition():
     partition = dict()
+    imagePaths = getImagePaths(MRIsequence="flair", shuffle="yes")
 
-    HGGimagePaths = getImagePaths(HGGPathName, "flair")
-    if (HGGimagePaths == -1):
-        print("Error occured while calling getImagePaths")
-    LGGimagePaths = getImagePaths(LGGPathName, "flair")
-    if (LGGimagePaths == -1):
-        print("Error occured while calling getImagePaths")
+    trainingDatasetCount = round(len(imagePaths) * 0.6)
+    trainingDatasetPaths = imagePaths[:trainingDatasetCount]
+    for path in trainingDatasetPaths:
+        imagePaths.remove(path)
 
-    # 60 to 40 training test set for now.
-    HGGtrainCount = round(len(HGGimagePaths) * 0.6)
-    LGGtrainCount = round(len(LGGimagePaths) * 0.6)
+    validationDatasetCount = round(len(imagePaths) * 0.5)
+    validationDatasetPaths = imagePaths[:validationDatasetCount]
 
-    HGGTrainImagePaths = HGGimagePaths[:HGGtrainCount]
-    LGGTrainImagePaths = LGGimagePaths[:LGGtrainCount]
-    trainImagePaths = list()
+    testDatasetCount = validationDatasetCount
+    testDatasetPaths = imagePaths[testDatasetCount:]
 
-    for item in HGGTrainImagePaths:
-        trainImagePaths.append(item)
-    for item in LGGTrainImagePaths:
-        trainImagePaths.append(item)
-
-    HGGTestImagePaths = HGGimagePaths[HGGtrainCount:]
-    LGGTestImagePaths = LGGimagePaths[LGGtrainCount:]
-    testImagePaths = list()
-
-    for item in HGGTestImagePaths:
-        testImagePaths.append(item)
-    for item in LGGTestImagePaths:
-        testImagePaths.append(item)
-
-    partition["train"] = trainImagePaths
-    partition["validation"] = testImagePaths
+    partition["train"] = trainingDatasetPaths
+    partition["validation"] = validationDatasetPaths
+    partition["test"] = testDatasetPaths
     return partition
 
 
 def createLabels():
     labels = dict()
 
-    HGGimagePaths = getImagePaths(HGGPathName, "flair")
-    for item in HGGimagePaths:
-        labels[item] = 1
-    LGGimagePaths = getImagePaths(LGGPathName, "flair")
-    for item in LGGimagePaths:
-        labels[item] = 0
+    imagePaths = getImagePaths(MRIsequence="flair")
+    if (imagePaths == -1):
+        print("createLabels failed. imagePaths returned error status")
+        return -1
+
+    for path in imagePaths:
+        dataClass = path.split(sep="/")[6]
+        if dataClass == "HGG":
+            labels[path] = 1
+        elif dataClass == "LGG":
+            labels[path] = 0
+        else:
+            print("createLabel. No such class exists. HGG or LGG")
+            return -1
 
     return labels
 
 
-def get_model():
+def get_model(n_input_features):
     lr = 0.001
-    model = LogisticRegression()
+    model = LogisticRegression(n_input_features)
     loss_func = torch.nn.BCELoss()
-    return loss_func, model, optim.SGD(model.parameters(), lr=lr)
+    opt = optim.SGD(model.parameters(), lr=lr)
+    return loss_func, model, opt
 
 
 #https://stanford.edu/~shervine/blog/pytorch-how-to-generate-data-parallel
@@ -138,18 +73,28 @@ def train():
 
     # Datasets
     partition = createPartition()
+    if (partition == -1):
+        print("Creating partition failed")
+        return -1
     labels = createLabels()
+    if (labels == -1):
+        print("Creating labels failed")
+        return -1
+
+    training_set = Dataset(partition['train'], labels)
+    validation_set = Dataset(partition['validation'], labels)
+    test_set = Dataset(partition['test'], labels)
+
+    # Number of flattened features
+    n_input_features = training_set[0][0].size()[0]
 
     # Generators
-    training_set = Dataset(partition['train'], labels)
     training_generator = torch.utils.data.DataLoader(training_set, **params)
-
-    validation_set = Dataset(partition['validation'], labels)
     validation_generator = torch.utils.data.DataLoader(validation_set,
                                                        **params)
-
+    testing_generator = torch.utils.data.DataLoader(test_set, **params)
     # Create a model
-    loss_func, model, opt = get_model()
+    loss_func, model, opt = get_model(n_input_features)
 
     # Loop over epochs
     for epoch in range(max_epochs):
@@ -171,6 +116,7 @@ def train():
 
         if (epoch + 1) % 10 == 0:
             print(f'epoch {epoch+1}, loss = {loss.item():.4f}')
+
         # Validation
         with torch.set_grad_enabled(False):
             for local_batch, local_labels in validation_generator:

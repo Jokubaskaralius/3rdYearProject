@@ -2,7 +2,6 @@
 #1. Cropping the images, reducing some of the background pixel values. But if CNN used, than convolutional layers would fix this anyways? Done
 #2. Resize the image, to remove uneccessary features.
 #3. Region enhancment of the tumor.
-#4. Save all 1d greyscale arrays to a .dat file and user matrix operations? Could improve performance by reducing time taken for numerical calculations?
 
 import os
 import numpy as np
@@ -35,42 +34,13 @@ def featureStandardization(features):
     return features
 
 
-#Crop a 2D image. Removes any rows or columns that are all 0 (all black)
-#image - a 2D numpy array
-#returns a cropped 2D numpy array
-def crop_2D(image):
-    if (type(image).__module__ != np.__name__):
-        print("Function crop_2D failed. Invalid argument. Pass a numpy array")
-        return -1
-    if (image.ndim != 2):
-        print(
-            "Function crop_2D failed. Invalid dimension array. Only 2D array possible."
-        )
-        return -1
-    all_column_crop_idx = list()
-    all_row_crop_idx = list()
-    for idx, column in enumerate(image.T):
-        is_all_zero = not np.any(column)
-        if is_all_zero:
-            #If all elements of the column of the image are 0, then crop the column of the image
-            all_column_crop_idx.append(idx)
-
-    column_cropped_image = np.delete(image, all_column_crop_idx, axis=1)
-
-    for idx, row in enumerate(image):
-        is_all_zero = not np.any(row)
-        if is_all_zero:
-            #If all elements of the row of the image are 0, then crop the row of the image
-            all_row_crop_idx.append(idx)
-
-    cropped_image = np.delete(column_cropped_image, all_row_crop_idx, axis=0)
-    return cropped_image
-
-
 #Modified version of the 2D crop.
 #Crop any numpy array (In our case crop either a 2D voxel slice image or a 3D voxel). Removes any dimension row that is all 0.
 #image - any numpy array
 #returns a cropped numpy array
+#Does not work as feature matrix has to remain the same. Meaning that cropping
+#must work differently
+#https://www.youtube.com/watch?v=bSyY8_rTxfs&t=247s
 def crop(arr):
     if (type(arr).__module__ != np.__name__):
         print("Function crop failed. Invalid argument. Pass a numpy array")
@@ -131,7 +101,7 @@ def getSingleDataExample(imgPathName):
     except:
         print("Incorrect MRI image format. Supported: .nii.gz")
         return -1
-    data = img.get_fdata()
+    data = img.get_fdata(dtype=np.float32)
 
     if (debug):
         print("Voxel shape", data.shape)
@@ -177,14 +147,11 @@ def getSingleDataExample(imgPathName):
         plt.tight_layout(pad=2.0)
         plt.show()
 
-    features = slice_2.flatten()
+    features = slice_2
     features = featureStandardization(features)
-    #    dataExample = np.insert(features, 0, label)
     return features
 
 
 test = getSingleDataExample(
     "/home/jokubas/DevWork/3rdYearProject/data/HGG/BraTS19_2013_2_1/BraTS19_2013_2_1_flair.nii.gz"
 )
-
-#np.savetxt("test.csv", test, delimiter=",")

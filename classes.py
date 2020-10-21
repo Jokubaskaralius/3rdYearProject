@@ -3,6 +3,8 @@ from torch import nn
 import math
 from processMedicalImages import getSingleDataExample
 #https://stanford.edu/~shervine/blog/pytorch-how-to-generate-data-parallel
+#https://medium.com/@aakashns/image-classification-using-logistic-regression-in-pytorch-ebb96cc9eb79
+#https://github.com/jcreinhold/niftidataset/blob/master/niftidataset/dataset.py
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -20,16 +22,16 @@ class Dataset(torch.utils.data.Dataset):
         ID = self.list_IDs[index]
 
         #Load data and get label
-        X = getSingleDataExample(ID)
+        X = torch.from_numpy(getSingleDataExample(ID).flatten())
         y = self.labels[ID]
 
         return X, y
 
 
 class LogisticRegression(nn.Module):
-    def __init__(self):
+    def __init__(self, n_input_features):
         super(LogisticRegression, self).__init__()
-        self.lin = nn.Linear(57600, 1)
+        self.linear = nn.Linear(n_input_features, 1)
 
     def forward(self, xb):
-        return torch.sigmoid(self.lin(xb))
+        return torch.sigmoid(self.linear(xb))
