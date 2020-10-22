@@ -19,8 +19,6 @@ class Visualize:
         # For now its okay, but maybe it's better to keep the state
         # of the data dictionary, so that we would not need to
         # iterate over the entire epoch everytime O(n^2)
-        #data = dict()
-        #data['data'] = list()
         data = list()
         for i in self.epoch:
             data.append({"x": self.epoch[i], "y": self.loss[i]})
