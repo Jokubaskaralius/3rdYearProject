@@ -23,5 +23,18 @@ class Visualize:
         for i in self.epoch:
             data.append({"x": self.epoch[i], "y": self.loss[i]})
 
-        with open('visualization/trainingLoss.json', 'w') as outfile:
+        with open('visualization/data/trainingLoss.json', 'w') as outfile:
+            json.dump(data, outfile)
+
+    def confusionMatrix(self, tp, tn, fp, fn, epoch):
+        data = dict()
+        data["tp"] = tp
+        data["tn"] = tn
+        data["fp"] = fp
+        data["fn"] = fn
+        data["epoch"] = epoch
+        self.exportConfusionMatrixData([data])
+
+    def exportConfusionMatrixData(self, data):
+        with open('visualization/data/confusionMatrix.json', 'w') as outfile:
             json.dump(data, outfile)

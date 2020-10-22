@@ -126,7 +126,7 @@ def train():
 
         # Validation
         with torch.set_grad_enabled(False):
-            prediction_correct = 0
+            tp, tn, fp, fn = 0, 0, 0, 0
             prediction_incorrect = 0
             for local_batch, local_labels in validation_generator:
                 # Transfer to GPU
@@ -137,17 +137,23 @@ def train():
                 labels_predicted = model(local_batch)
                 predicted_class = labels_predicted.round()
 
-                if (predicted_class.eq(local_labels).item() is True):
-                    prediction_correct = prediction_correct + 1
+                #this algorithm is done for batch = 1
+                if (predicted_class.eq(local_labels).item() is False
+                        and local_labels == 0):
+                    fp = fp + 1
+                elif (predicted_class.eq(local_labels).item() is False
+                      and local_labels == 1):
+                    fn = fn + 1
+                elif (predicted_class.eq(local_labels).item() is True
+                      and local_labels == 1):
+                    tp = tp + 1
                 else:
-                    prediction_incorrect = prediction_incorrect + 1
-                acc = predicted_class.eq(local_labels).sum() / float(
-                    local_labels.shape[0])
-                acc = prediction_correct / (prediction_correct +
-                                            prediction_incorrect)
+                    tn = tn + 1
+            visualize.confusionMatrix(tp, tn, fp, fn, epoch)
+            accuracy = (tp + tn) / (tp + tn + fp + fn)
 
             if (epoch + 1) % 10 == 0:
-                print(f'epoch {epoch+1}, accuracy = {acc*100:.4f}%')
+                print(f'epoch {epoch+1}, accuracy = {accuracy*100:.4f}%')
 
 
 train()

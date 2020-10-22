@@ -1,0 +1,35 @@
+/* Confusion Matrix
+Copyright (c) <Arpit Narechania>
+<script src="https://gist.github.com/arpitnarechania/dbf03d8ef7fffa446379d59db6354bac.js"></script>
+https://gist.github.com/arpitnarechania/dbf03d8ef7fffa446379d59db6354bac
+MIT License */
+
+body {
+  padding-left: 50px;
+}
+
+.axis text {
+  font: 10px sans-serif;
+}
+
+.axis line,
+.axis path {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+td,
+th,
+tr {
+  padding: 4px;
+  border: 1px solid black;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+#dataView {
+  margin-top: 50px;
+}
