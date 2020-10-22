@@ -4,8 +4,8 @@ import torch
 from torch import optim
 import torchvision.transforms as transforms
 from classes import Dataset, logisticRegression
-import matplotlib.pyplot as plt
 from utils import getImagePaths
+from visualize import Visualize
 from sklearn.linear_model import LogisticRegression
 
 
@@ -71,7 +71,7 @@ def train():
     torch.backends.cudnn.benchmark = True
 
     # Parameters
-    params = {'batch_size': 10, 'shuffle': True, 'num_workers': 6}
+    params = {'batch_size': 1, 'shuffle': True, 'num_workers': 6}
     max_epochs = 100
 
     # Datasets
@@ -100,6 +100,9 @@ def train():
     # Create a model
     loss_func, model, opt = get_model(n_input_features)
 
+    #Visualization class
+    visualize = Visualize(max_epochs)
+
     # Loop over epochs
     for epoch in range(max_epochs):
         # Training
@@ -117,6 +120,7 @@ def train():
             opt.step()
             opt.zero_grad()
 
+        visualize.trainingLoss(epoch, loss.item())
         if (epoch + 1) % 10 == 0:
             print(f'epoch {epoch+1}, loss = {loss.item():.4f}')
 
@@ -146,7 +150,6 @@ def train():
                 print(f'epoch {epoch+1}, accuracy = {acc*100:.4f}%')
 
 
-#Suplottint loss.
 train()
 
 
