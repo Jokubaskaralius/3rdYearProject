@@ -79,7 +79,7 @@ def train():
 
     # Parameters
     params = {'batch_size': 1, 'shuffle': True, 'num_workers': 6}
-    max_epochs = 100
+    max_epochs = 15
 
     # Datasets
     partition = createPartition()
@@ -134,7 +134,7 @@ def train():
 
         epoch_cost = epoch_loss / len(training_set)
         visualize.trainingLoss(epoch, epoch_cost)
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 1 == 0:
             print(f'epoch {epoch+1}, cost = {epoch_cost:.4f}')
 
         # Validation
@@ -165,8 +165,36 @@ def train():
             visualize.confusionMatrix(tp, tn, fp, fn, epoch)
             accuracy = (tp + tn) / (tp + tn + fp + fn)
 
-            if (epoch + 1) % 10 == 0:
+            if (epoch + 1) % 1 == 0:
                 print(f'epoch {epoch+1}, accuracy = {accuracy*100:.4f}%')
+
+    # Testing the final accuracy of the model
+    with torch.no_grad():
+        tp, tn, fp, fn = 0, 0, 0, 0
+        accuracy = 0
+        for local_batch, local_labels in testing_generator:
+            # Transfer to GPU
+            local_batch, local_labels = local_batch.to(
+                device), local_labels.to(device)
+            labels_predicted = model(local_batch)
+            predicted_class = labels_predicted.round()
+            arr = predicted_class.T.eq(local_labels)[0].numpy()
+            for idx, item in enumerate(arr):
+                label = int(local_labels[idx].item())
+                item = bool(item)
+                if (item is False and label == 0):
+                    fp = fp + 1
+                elif (item is False and label == 1):
+                    fn = fn + 1
+                elif (item is True and label == 1):
+                    tp = tp + 1
+                else:
+                    tn = tn + 1
+
+        visualize.confusionMatrix(tp, tn, fp, fn, epoch)
+        accuracy = (tp + tn) / (tp + tn + fp + fn)
+
+        print(f'accuracy = {accuracy*100:.4f}%')
 
 
 train()
