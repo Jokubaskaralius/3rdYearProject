@@ -32,7 +32,7 @@ def getDataClassPath():
 #MRIsequence - possible MRI sequences. "all" - returns all sequences, t1 returns only t1.
 #possible sequences: all, flair, seg, t1, t1ce, t2
 #returns either all lists or a certain list
-def getImagePaths(MRIsequence="all", shuffle="no"):
+def getImagePaths(MRIsequence="all", shuffle="no", shuffleSeed=None):
     if (getDataClassPath == -1):
         print("Failed getDataClassPath")
         return -1
@@ -58,6 +58,9 @@ def getImagePaths(MRIsequence="all", shuffle="no"):
             t1.append(os.path.join(imageFolder, files[2]))
             t1ce.append(os.path.join(imageFolder, files[3]))
             t2.append(os.path.join(imageFolder, files[4]))
+
+    if (shuffleSeed == None or isinstance(shuffleSeed, int)):
+        random.seed(shuffleSeed)
 
     if (shuffle == "yes" or shuffle == "Yes" or shuffle == "Y"
             or shuffle == "y"):

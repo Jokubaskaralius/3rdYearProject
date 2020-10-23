@@ -8,6 +8,11 @@ from utils import getImagePaths
 from visualize import Visualize
 from sklearn.linear_model import LogisticRegression
 
+# For reproducability
+SEED = 42
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+
 
 # 60% training, 20% validation, 20% test
 # Need to ensure that the training set has enough LGG data for classification?
@@ -15,7 +20,9 @@ from sklearn.linear_model import LogisticRegression
 # Because It is not possible to reproduce.
 def createPartition():
     partition = dict()
-    imagePaths = getImagePaths(MRIsequence="flair", shuffle="yes")
+    imagePaths = getImagePaths(MRIsequence="flair",
+                               shuffle="yes",
+                               shuffleSeed=SEED)
 
     trainingDatasetCount = round(len(imagePaths) * 0.6)
     trainingDatasetPaths = imagePaths[:trainingDatasetCount]
@@ -105,6 +112,8 @@ def train():
 
     # Loop over epochs
     for epoch in range(max_epochs):
+        epoch_loss = 0.0
+        epoch_cost = 0.0
         # Training
         for local_batch, local_labels in training_generator:
             # Transfer to GPU
@@ -120,14 +129,17 @@ def train():
             opt.step()
             opt.zero_grad()
 
-        visualize.trainingLoss(epoch, loss.item())
-        if (epoch + 1) % 10 == 0:
-            print(f'epoch {epoch+1}, loss = {loss.item():.4f}')
+            batch_loss = labels_predicted.shape[0] * loss.item()
+            epoch_loss += batch_loss
+
+        epoch_cost = epoch_loss / len(training_set)
+        visualize.trainingLoss(epoch, epoch_cost)
+        if (epoch + 1) % 2 == 0:
+            print(f'epoch {epoch+1}, cost = {epoch_cost:.4f}')
 
         # Validation
         with torch.set_grad_enabled(False):
             tp, tn, fp, fn = 0, 0, 0, 0
-            prediction_incorrect = 0
             for local_batch, local_labels in validation_generator:
                 # Transfer to GPU
                 local_batch, local_labels = local_batch.to(
@@ -136,19 +148,20 @@ def train():
                 # Model computations
                 labels_predicted = model(local_batch)
                 predicted_class = labels_predicted.round()
+                arr = predicted_class.T.eq(local_labels)[0].numpy()
 
-                #this algorithm is done for batch = 1
-                if (predicted_class.eq(local_labels).item() is False
-                        and local_labels == 0):
-                    fp = fp + 1
-                elif (predicted_class.eq(local_labels).item() is False
-                      and local_labels == 1):
-                    fn = fn + 1
-                elif (predicted_class.eq(local_labels).item() is True
-                      and local_labels == 1):
-                    tp = tp + 1
-                else:
-                    tn = tn + 1
+                for idx, item in enumerate(arr):
+                    label = int(local_labels[idx].item())
+                    item = bool(item)
+                    if (item is False and label == 0):
+                        fp = fp + 1
+                    elif (item is False and label == 1):
+                        fn = fn + 1
+                    elif (item is True and label == 1):
+                        tp = tp + 1
+                    else:
+                        tn = tn + 1
+
             visualize.confusionMatrix(tp, tn, fp, fn, epoch)
             accuracy = (tp + tn) / (tp + tn + fp + fn)
 
