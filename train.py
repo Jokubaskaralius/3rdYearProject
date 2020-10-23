@@ -134,7 +134,7 @@ def train():
 
         epoch_cost = epoch_loss / len(training_set)
         visualize.trainingLoss(epoch, epoch_cost)
-        if (epoch + 1) % 2 == 0:
+        if (epoch + 1) % 10 == 0:
             print(f'epoch {epoch+1}, cost = {epoch_cost:.4f}')
 
         # Validation

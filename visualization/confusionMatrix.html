@@ -34,6 +34,7 @@ MIT License -->
 			[data[0].fn, data[0].tn]
 		];
 
+        var epoch = data[0].epoch;
         var tp = confusionMatrix[0][0];
         var fn = confusionMatrix[0][1];
         var fp = confusionMatrix[1][0];
@@ -53,7 +54,7 @@ MIT License -->
         recall = Math.round(recall * 100) / 100
 
         var computedData = [];
-        computedData.push({"F1":f1, "PRECISION":precision,"RECALL":recall,"ACCURACY":accuracy});
+        computedData.push({"F1":f1, "PRECISION":precision,"RECALL":recall,"ACCURACY":accuracy, "EPOCH":epoch});
 
         var labels = ['HG Tumour', 'LG Tumour'];
 		Matrix({
@@ -65,7 +66,7 @@ MIT License -->
 		});
 
 		// rendering the table
-         var table = tabulate(computedData, ["F1", "PRECISION","RECALL","ACCURACY"]);
+         var table = tabulate(computedData, ["F1", "PRECISION","RECALL","ACCURACY","EPOCH"]);
         })
 	</script>
 </body>
