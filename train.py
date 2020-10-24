@@ -62,6 +62,29 @@ def createLabels():
     return labels
 
 
+#Use the predicted labels and true labels to check how many did the model get right
+#labels_predicted - a tensor that contains the label predicted for each item in the batch
+#true_labels - a tensor that stores the true class of the data item in the batch
+#arr - true positive, true negative, false positive, false negative
+#returns - true positive, true negative, false positive, false negative
+def validate(labels_predicted, true_labels, arr):
+    tp, tn, fp, fn = arr[0], arr[1], arr[2], arr[3]
+    predicted_class = labels_predicted.round()
+    arr = predicted_class.T.eq(true_labels)[0].numpy()
+    for idx, item in enumerate(arr):
+        label = int(true_labels[idx].item())
+        item = bool(item)
+        if (item is False and label == 0):
+            fp = fp + 1
+        elif (item is False and label == 1):
+            fn = fn + 1
+        elif (item is True and label == 1):
+            tp = tp + 1
+        else:
+            tn = tn + 1
+    return tp, tn, fp, fn
+
+
 def get_model(n_input_features):
     lr = 0.001
     model = logisticRegression(n_input_features)
@@ -147,20 +170,8 @@ def train():
 
                 # Model computations
                 labels_predicted = model(local_batch)
-                predicted_class = labels_predicted.round()
-                arr = predicted_class.T.eq(local_labels)[0].numpy()
-
-                for idx, item in enumerate(arr):
-                    label = int(local_labels[idx].item())
-                    item = bool(item)
-                    if (item is False and label == 0):
-                        fp = fp + 1
-                    elif (item is False and label == 1):
-                        fn = fn + 1
-                    elif (item is True and label == 1):
-                        tp = tp + 1
-                    else:
-                        tn = tn + 1
+                tp, tn, fp, fn = validate(labels_predicted, local_labels,
+                                          [tp, tn, fp, fn])
 
             visualize.confusionMatrix(tp, tn, fp, fn, epoch)
             accuracy = (tp + tn) / (tp + tn + fp + fn)
@@ -176,20 +187,10 @@ def train():
             # Transfer to GPU
             local_batch, local_labels = local_batch.to(
                 device), local_labels.to(device)
+
             labels_predicted = model(local_batch)
-            predicted_class = labels_predicted.round()
-            arr = predicted_class.T.eq(local_labels)[0].numpy()
-            for idx, item in enumerate(arr):
-                label = int(local_labels[idx].item())
-                item = bool(item)
-                if (item is False and label == 0):
-                    fp = fp + 1
-                elif (item is False and label == 1):
-                    fn = fn + 1
-                elif (item is True and label == 1):
-                    tp = tp + 1
-                else:
-                    tn = tn + 1
+            tp, tn, fp, fn = validate(labels_predicted, local_labels,
+                                      [tp, tn, fp, fn])
 
         visualize.confusionMatrix(tp, tn, fp, fn, epoch)
         accuracy = (tp + tn) / (tp + tn + fp + fn)
