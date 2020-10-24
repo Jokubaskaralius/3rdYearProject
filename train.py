@@ -2,12 +2,11 @@ import os
 import numpy as np
 import torch
 from torch import optim
+import torchvision.transforms as transforms
 from classes import Dataset, logisticRegression
 from utils import getImagePaths
 from visualize import Visualize
 from sklearn.linear_model import LogisticRegression
-import torchvision.transforms as torch_tfms
-from niftidataset import *
 
 # For reproducability
 SEED = 42
@@ -115,12 +114,9 @@ def train():
         print("Creating labels failed")
         return -1
 
-    tfms = torch_tfms.Compose([ToTensor(), Normalize()])
-
-    training_set = NiftiDataset(partition['train'], partition['train'], tfms)
-    validation_set = NiftiDataset(partition['validation'],
-                                  partition['validation'], tfms)
-    test_set = NiftiDataset(partition['test'], partition['test'], tfms)
+    training_set = Dataset(partition['train'], labels)
+    validation_set = Dataset(partition['validation'], labels)
+    test_set = Dataset(partition['test'], labels)
 
     # Number of flattened features
     n_input_features = training_set[0][0].size()[0]

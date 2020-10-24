@@ -36,8 +36,33 @@ def featureStandardization(features):
     return features
 
 
+def image_scale(image, dim=None, plot=False):
+    org_height, org_width = image.shape
+    res_height, res_width = dim
+    if (dim is None):
+        scale_percent = 60  # percent of original size
+        res_width = int(image.shape[1] * scale_percent / 100)
+        res_height = int(image.shape[0] * scale_percent / 100)
+        dim = (res_width, res_height)
+    # resize image
+    resized_image = cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
+    if plot:
+        fig, (ax1, ax2) = plt.subplots(nrows=1,
+                                       ncols=2,
+                                       figsize=(15, 7),
+                                       dpi=50,
+                                       sharex=True,
+                                       sharey=True)
+        ax2.set_title("Resized image")
+        ax1.set_title("Original image")
+        ax2.imshow(resized_image, cmap='gray')
+        ax1.imshow(image, cmap='gray')
+        plt.show()
+    return resized_image
+
+
 #https://www.youtube.com/watch?v=bSyY8_rTxfs&t=247s
-def crop_background(image, plot=False):
+def image_crop(image, plot=False):
     #Convert the images to grayscale
     #grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     #Blur the images
@@ -162,7 +187,7 @@ def getSingleDataExample(imgPathName):
         plt.show()
 
     image = slice_2
-    cropped_image = crop_background(image, plot=visualize_cropped)
+    cropped_image = image_crop(image, plot=visualize_cropped)
     norm_image = cv2.normalize(cropped_image,
                                None,
                                alpha=0,
@@ -174,8 +199,8 @@ def getSingleDataExample(imgPathName):
         plt.imshow(norm_image)
         plt.show()
 
-    processed_img = norm_image
-    print(processed_img.shape)
+    scaled = image_scale(norm_image, dim=(75, 75))
+    processed_img = scaled
     return processed_img
 
 
