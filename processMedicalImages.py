@@ -8,6 +8,8 @@ import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+import cv2
+import imutils
 
 debug = 0
 visualize_original = 0
@@ -34,27 +36,66 @@ def featureStandardization(features):
     return features
 
 
-#Modified version of the 2D crop.
-#Crop any numpy array (In our case crop either a 2D voxel slice image or a 3D voxel). Removes any dimension row that is all 0.
-#image - any numpy array
-#returns a cropped numpy array
-#Does not work as feature matrix has to remain the same. Meaning that cropping
-#must work differently
 #https://www.youtube.com/watch?v=bSyY8_rTxfs&t=247s
-def crop(arr):
-    if (type(arr).__module__ != np.__name__):
-        print("Function crop failed. Invalid argument. Pass a numpy array")
-        return -1
-    dims = arr.ndim
-    for dim in range(dims):
-        crop_dim_idx = list()
-        for idx, item in enumerate(np.rollaxis(arr, dim)):
-            is_all_zero = not np.any(item)
-            if is_all_zero:
-                crop_dim_idx.append(idx)
-        dim_cropped = np.delete(arr, crop_dim_idx, axis=dim)
-        arr = dim_cropped
-    return arr
+def crop_background(image, plot=False):
+    #Convert the images to grayscale
+    #grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    #Blur the images
+    grayscale = cv2.GaussianBlur(image, (5, 5), 0)
+    #Threshold the images into binary
+    threshold_image = cv2.threshold(grayscale, 45, 255, cv2.THRESH_BINARY)[1]
+
+    #Erosion and Dilation to minimize the noise
+    threshold_image = cv2.erode(threshold_image, None, iterations=2)
+    threshold_image = cv2.dilate(threshold_image, None, iterations=2)
+    #Convert it from float32 to uint8 to get the contours
+    threshold_image = np.uint8(threshold_image)
+    #Detect the contours of the image
+    contour = cv2.findContours(threshold_image.copy(), cv2.RETR_EXTERNAL,
+                               cv2.CHAIN_APPROX_SIMPLE)
+    #Grab the contours of the image
+    contour = imutils.grab_contours(contour)
+    c = max(contour, key=cv2.contourArea)
+
+    #Find the extreme points where to crop the image
+    extreme_pnts_left = tuple(c[c[:, :, 0].argmin()][0])
+    extreme_pnts_right = tuple(c[c[:, :, 0].argmax()][0])
+    extreme_pnts_top = tuple(c[c[:, :, 1].argmin()][0])
+    extreme_pnts_bottom = tuple(c[c[:, :, 1].argmax()][0])
+
+    #Plot and test the image
+    new_image = image[extreme_pnts_top[1]:extreme_pnts_bottom[1],
+                      extreme_pnts_left[0]:extreme_pnts_right[0]]
+    if plot:
+        plt.figure()
+        plt.subplot(1, 2, 1)
+        plt.imshow(image)
+        plt.tick_params(axis="both",
+                        which="both",
+                        top=False,
+                        bottom=False,
+                        left=False,
+                        right=False,
+                        labeltop=False,
+                        labelbottom=False,
+                        labelleft=False,
+                        labelright=False)
+        plt.title("Original Image")
+        plt.subplot(1, 2, 2)
+        plt.imshow(new_image)
+        plt.tick_params(axis="both",
+                        which="both",
+                        top=False,
+                        bottom=False,
+                        left=False,
+                        right=False,
+                        labeltop=False,
+                        labelbottom=False,
+                        labelleft=False,
+                        labelright=False)
+        plt.title("Cropped Image")
+        plt.show()
+    return new_image
 
 
 #http://iyatomi-lab.info/sites/default/files/user/IEEE%20EMBC%20Arai-Chayama.pdf
@@ -109,10 +150,6 @@ def getSingleDataExample(imgPathName):
     slice_2 = data[:, :, 77]
     #pca(slice_2)
 
-    slice_0_cropped = crop(slice_0)
-    slice_1_cropped = crop(slice_1)
-    slice_2_cropped = crop(slice_2)
-
     if (debug):
         print("Center slice shape of 1st dimension", slice_0.shape)
         print("Center slice shape of 2nd dimension", slice_1.shape)
@@ -124,30 +161,24 @@ def getSingleDataExample(imgPathName):
         plt.tight_layout(pad=2.0)
         plt.show()
 
-    if (visualize_cropped):
-        show_slices([slice_0_cropped, slice_1_cropped, slice_2_cropped])
-        plt.suptitle("Cropped Center slices for MRI image")
-        plt.tight_layout(pad=2.0)
-        plt.show()
+    image = slice_2
+    cropped_image = crop_background(image, plot=visualize_cropped)
+    norm_image = cv2.normalize(cropped_image,
+                               None,
+                               alpha=0,
+                               beta=1,
+                               norm_type=cv2.NORM_MINMAX,
+                               dtype=cv2.CV_32F)
 
     if (visualize_standardized):
-        np.savetxt("regular.csv", slice_0.flatten(), delimiter=",")
-        slice_0_stand = featureStandardization(slice_0)
-        np.savetxt("standardised.csv", slice_0_stand.flatten(), delimiter=",")
-        slice_1_stand = featureStandardization(slice_1)
-        slice_2_stand = featureStandardization(slice_2)
-        show_slices([slice_0_stand, slice_1_stand, slice_2_stand])
-        plt.suptitle(
-            "Standardized (mean normalized) Center slices for MRI image")
-        plt.tight_layout(pad=2.0)
+        plt.imshow(norm_image)
         plt.show()
 
-    features = slice_2
-    features = featureStandardization(features)
-    #   np.savetxt("test.csv", features, delimiter=",")
-    return features
+    processed_img = norm_image
+    print(processed_img.shape)
+    return processed_img
 
 
-#testHGG = getSingleDataExample(
-#    "/home/jokubas/DevWork/3rdYearProject/data/HGG/BraTS19_2013_2_1/BraTS19_2013_2_1_flair.nii.gz"
-#)
+testHGG = getSingleDataExample(
+    "/home/jokubas/DevWork/3rdYearProject/data/HGG/BraTS19_2013_2_1/BraTS19_2013_2_1_flair.nii.gz"
+)
