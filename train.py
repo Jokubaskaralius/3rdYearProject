@@ -10,7 +10,8 @@ from sklearn.linear_model import LogisticRegression
 
 # For reproducability
 SEED = 42
-torch.manual_seed(SEED)
+if (type(SEED) == int):
+    torch.manual_seed(SEED)
 np.random.seed(SEED)
 
 
