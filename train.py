@@ -105,8 +105,8 @@ def train():
     torch.backends.cudnn.benchmark = True
 
     # Parameters
-    params = {'batch_size': 2, 'shuffle': True, 'num_workers': 6}
-    max_epochs = 15
+    params = {'batch_size': 10, 'shuffle': True, 'num_workers': 6}
+    max_epochs = 100
 
     # Datasets
     partition = createPartition()
@@ -160,26 +160,39 @@ def train():
             epoch_loss = epoch_loss + batch_loss
 
         epoch_cost = epoch_loss / len(training_set)
+
         visualize.trainingLoss(epoch, epoch_cost)
         if (epoch + 1) % 1 == 0:
             print(f'epoch {epoch+1}, cost = {epoch_cost:.4f}')
 
         # Validation
         with torch.set_grad_enabled(False):
+            epoch_loss = 0.0
+            epoch_cost = 0.0
             tp, tn, fp, fn = 0, 0, 0, 0
             for local_batch, local_labels in validation_generator:
                 # Transfer to GPU
                 local_batch, local_labels = local_batch.to(
                     device), local_labels.to(device)
 
+                local_labels = local_labels.view(-1, 1).float()
+
                 # Model computations
                 labels_predicted = model(local_batch)
+                loss = loss_func(labels_predicted, local_labels)
+
+                batch_loss = labels_predicted.shape[0] * loss.item()
+                epoch_loss = epoch_loss + batch_loss
+
                 tp, tn, fp, fn = validate(labels_predicted, local_labels,
                                           [tp, tn, fp, fn])
 
-            visualize.confusionMatrix(tp, tn, fp, fn, epoch)
-            accuracy = (tp + tn) / (tp + tn + fp + fn)
+            epoch_cost = epoch_loss / len(validation_set)
 
+            visualize.validationLoss(epoch, epoch_cost)
+            visualize.confusionMatrix(tp, tn, fp, fn, epoch)
+
+            accuracy = (tp + tn) / (tp + tn + fp + fn)
             if (epoch + 1) % 1 == 0:
                 print(f'epoch {epoch+1}, accuracy = {accuracy*100:.4f}%')
 

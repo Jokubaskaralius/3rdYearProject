@@ -7,7 +7,6 @@ import os
 import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
 import cv2
 import imutils
 
@@ -123,34 +122,6 @@ def image_crop(image, plot=False):
     return new_image
 
 
-#http://iyatomi-lab.info/sites/default/files/user/IEEE%20EMBC%20Arai-Chayama.pdf
-#https://srinjaypaul.github.io/3D_Convolutional_autoencoder_for_brain_volumes/
-#https://github.com/srinjaypaul/3D-convolutional-autoencoder-for-fmri-volumes
-def pca(arr):
-    scaled_X = featureStandardization(crop(arr))
-    features = scaled_X.T
-    pca = PCA()
-    pca.fit(features)
-    pca.transform(features)
-    per_var = np.round(pca.explained_variance_ratio_ * 100, decimals=1)
-
-    #get all non zero Principal component variances
-    per_var = np.delete(per_var,
-                        [idx for idx, var in enumerate(per_var) if var == 0])
-
-    labels = ["PC1" + str(x) for x in range(1, len(per_var) + 1)]
-    bar = plt.bar(x=range(1,
-                          len(per_var) + 1),
-                  height=per_var,
-                  tick_label=labels)
-
-    plt.ylabel("Percentage of Explained Variance")
-    plt.xlabel("Principal Component")
-    plt.title("Scree plot")
-    plt.xticks(rotation=90)
-    plt.show()
-
-
 #Function that processes a NIFTI format image
 #imgPathName - absolute or relative path to the NIFTI (.nii.gz) image archive.
 #label - the label passed by a calling function to specify is High grade tumour (1) or vice versa (0).
@@ -173,7 +144,6 @@ def getSingleDataExample(imgPathName):
     slice_0 = data[120, :, :]
     slice_1 = data[:, 120, :]
     slice_2 = data[:, :, 77]
-    #pca(slice_2)
 
     if (debug):
         print("Center slice shape of 1st dimension", slice_0.shape)

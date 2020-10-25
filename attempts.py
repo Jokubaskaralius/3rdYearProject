@@ -1,3 +1,6 @@
+from sklearn.decomposition import PCA
+
+
 #Crop a 2D image. Removes any rows or columns that are all 0 (all black)
 #image - a 2D numpy array
 #returns a cropped 2D numpy array
@@ -52,3 +55,31 @@ def crop(arr):
         dim_cropped = np.delete(arr, crop_dim_idx, axis=dim)
         arr = dim_cropped
     return arr
+
+
+#http://iyatomi-lab.info/sites/default/files/user/IEEE%20EMBC%20Arai-Chayama.pdf
+#https://srinjaypaul.github.io/3D_Convolutional_autoencoder_for_brain_volumes/
+#https://github.com/srinjaypaul/3D-convolutional-autoencoder-for-fmri-volumes
+def pca(arr):
+    scaled_X = featureStandardization(crop(arr))
+    features = scaled_X.T
+    pca = PCA()
+    pca.fit(features)
+    pca.transform(features)
+    per_var = np.round(pca.explained_variance_ratio_ * 100, decimals=1)
+
+    #get all non zero Principal component variances
+    per_var = np.delete(per_var,
+                        [idx for idx, var in enumerate(per_var) if var == 0])
+
+    labels = ["PC1" + str(x) for x in range(1, len(per_var) + 1)]
+    bar = plt.bar(x=range(1,
+                          len(per_var) + 1),
+                  height=per_var,
+                  tick_label=labels)
+
+    plt.ylabel("Percentage of Explained Variance")
+    plt.xlabel("Principal Component")
+    plt.title("Scree plot")
+    plt.xticks(rotation=90)
+    plt.show()
