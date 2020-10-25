@@ -70,10 +70,10 @@ def createLabels():
 def validate(labels_predicted, true_labels, arr):
     tp, tn, fp, fn = arr[0], arr[1], arr[2], arr[3]
     predicted_class = labels_predicted.round()
-    arr = predicted_class.T.eq(true_labels)[0].numpy()
+    arr = predicted_class.T.eq(true_labels)[0]
     for idx, item in enumerate(arr):
         label = int(true_labels[idx].item())
-        item = bool(item)
+        item = bool(item.item())
         if (item is False and label == 0):
             fp = fp + 1
         elif (item is False and label == 1):
@@ -85,10 +85,15 @@ def validate(labels_predicted, true_labels, arr):
     return tp, tn, fp, fn
 
 
-def get_model(n_input_features):
+def get_model(n_input_features, device):
     lr = 0.001
-    model = logisticRegression(n_input_features)
-    loss_func = torch.nn.BCELoss()
+    try:
+        if (device.type == 'cuda'):
+            loss_func = torch.nn.BCELoss().cuda()
+            model = logisticRegression(n_input_features).cuda()
+    except:
+        loss_func = torch.nn.BCELoss()
+        model = logisticRegression(n_input_features)
     opt = optim.SGD(model.parameters(), lr=lr)
     return loss_func, model, opt
 
@@ -97,11 +102,10 @@ def get_model(n_input_features):
 def train():
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
-    device = "cpu"
     torch.backends.cudnn.benchmark = True
 
     # Parameters
-    params = {'batch_size': 1, 'shuffle': True, 'num_workers': 6}
+    params = {'batch_size': 2, 'shuffle': True, 'num_workers': 6}
     max_epochs = 15
 
     # Datasets
@@ -128,7 +132,7 @@ def train():
     testing_generator = torch.utils.data.DataLoader(test_set, **params)
 
     # Create a model
-    loss_func, model, opt = get_model(n_input_features)
+    loss_func, model, opt = get_model(n_input_features, device)
 
     #Visualization class
     visualize = Visualize(max_epochs)
@@ -153,7 +157,7 @@ def train():
             opt.zero_grad()
 
             batch_loss = labels_predicted.shape[0] * loss.item()
-            epoch_loss += batch_loss
+            epoch_loss = epoch_loss + batch_loss
 
         epoch_cost = epoch_loss / len(training_set)
         visualize.trainingLoss(epoch, epoch_cost)
