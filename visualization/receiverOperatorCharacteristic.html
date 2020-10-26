@@ -44,7 +44,9 @@
             // }
             var arrayLength = data.length;
             var forNow = []
-            var color = getRandomColor()
+            var color1 = getRandomColor()
+            var color2 = getRandomColor()
+            var color3 = getRandomColor()
             for (var i = 0; i < arrayLength; i++) {
                 x_y = data[i][0]
                 forNow[i] = x_y
@@ -56,11 +58,27 @@
                 data: {
                     datasets: [{
                         label: "For now",
-                        backgroundColor: color,
-                        borderColor: color,
+                        backgroundColor: color1,
+                        borderColor: color1,
                         fill: false,
                         data: forNow,
                         showLine: false
+                    }, {
+                        label: "Random Guess",
+                        backgroundColor: color2,
+                        borderColor: color2,
+                        fill: false,
+                        data: [{x: 0, y: 0},{x: 1, y: 1}],
+                        borderDash: [5,20],
+                        showLine: true
+                    }, {
+                        label: "Perfect Estimates",
+                        backgroundColor: color3,
+                        borderColor: color3,
+                        fill: false,
+                        data: [{x: 0, y: 0},{x: 0, y: 1},{x: 1, y: 1}],
+                        borderDash: [10,10],
+                        showLine: true
                     }]
                 },
                 options: {
