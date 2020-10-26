@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Receiver Operator Characteristic (ROC)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+</head>
+
+<style>
+    body {
+        width: 100vh;
+        height: 90vh;
+    }
+</style>
+
+<body>
+    <canvas id="myChart" width="400" height="400"></canvas>
+    <script>
+        function getRandomColor() {
+            var letters = '0123456789ABCDEF';
+            var color = '#';
+            for (var i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+        var ctx = document.getElementById('myChart').getContext('2d');
+        var trainingLoss = $.getJSON('data/ROC.json', (data) => {
+
+            // var arrayLength = data.length;
+            // //var x_y = Array()
+            // var data_sets = []
+            // for (var i = 0; i < arrayLength; i++) {
+            //     //x_y = x_y.concat(data[i][0])
+            //     var x_y = data[i][0]
+            //     var threshold = data[i][1].toString()
+            //     var color = getRandomColor()
+            //     var obj = { label: threshold, data: x_y, fill: false, backgroundColor: color, borderColor: color }
+            //     //data_sets.push(obj)
+            //     data_sets[i] = obj
+            // }
+            var arrayLength = data.length;
+            var forNow = []
+            var color = getRandomColor()
+            for (var i = 0; i < arrayLength; i++) {
+                x_y = data[i][0]
+                forNow[i] = x_y
+            }
+
+            console.log()
+            var scatterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: "For now",
+                        backgroundColor: color,
+                        borderColor: color,
+                        fill: false,
+                        data: forNow,
+                        showLine: false
+                    }]
+                },
+                options: {
+                    layout: {
+                        padding: {
+                            left: 50,
+                            right: 0,
+                            top: 0,
+                            bottom: 20
+                        }
+                    },
+                    scales: {
+                        xAxes: [{
+                            type: 'linear',
+                            position: 'bottom',
+                            scaleLabel: {
+                                display: true,
+                                labelString: "False Positive Rate (1 - Specificity)",
+                                fontColor: "#22070B",
+                                fontSize: 26
+                            }
+                        }],
+                        yAxes: [{
+                            scaleLabel: {
+                                display: true,
+                                labelString: "True Positive Rate (Sensitivity)",
+                                fontColor: "#22070B",
+                                fontSize: 26
+                            }
+                        }]
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

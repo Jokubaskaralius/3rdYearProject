@@ -52,3 +52,20 @@ class Visualize:
     def exportConfusionMatrixData(self, data):
         with open('visualization/data/confusionMatrix.json', 'w') as outfile:
             json.dump(data, outfile)
+
+    def ROC(self, data):
+        data_roc = list()
+        for item in data:
+            threshold = item[0]
+            true_positive_rate = item[1]
+            false_positive_rate = item[2]
+            obj = [{
+                "x": false_positive_rate,
+                "y": true_positive_rate
+            }, threshold]
+            data_roc.append(obj)
+        self.exportROC(data_roc)
+
+    def exportROC(self, data):
+        with open('visualization/data/ROC.json', 'w') as outfile:
+            json.dump(data, outfile)

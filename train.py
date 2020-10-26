@@ -86,6 +86,40 @@ def validate(labels_predicted, true_labels, arr):
     return tp, tn, fp, fn
 
 
+def ROC(data_generator, model):
+    probability_thresholds = torch.linspace(0, 1, steps=10)
+    data_roc = list()
+    for p in probability_thresholds:
+        tp, tn, fp, fn = 0, 0, 0, 0
+        for local_batch, local_labels in data_generator:
+            local_batch, local_labels = local_batch.to(
+                "cuda:0"), local_labels.to("cuda:0")
+
+            local_labels = local_labels.view(-1, 1).float()
+
+            labels_predicted = model(local_batch)
+
+            predicted_class = (labels_predicted > p).long()
+
+            arr = predicted_class.T.eq(local_labels)[0]
+            for idx, item in enumerate(arr):
+                label = int(local_labels[idx].item())
+                item = bool(item.item())
+                if (item is False and label == 0):
+                    fp = fp + 1
+                elif (item is False and label == 1):
+                    fn = fn + 1
+                elif (item is True and label == 1):
+                    tp = tp + 1
+                else:
+                    tn = tn + 1
+        true_positive_rate = tp / (tp + fn)
+        false_positive_rate = fp / (fp + tn)
+        result = [float(p), true_positive_rate, false_positive_rate]
+        data_roc.append(result)
+    return data_roc
+
+
 def get_model(n_input_features, device):
     lr = 0.001
     try:
@@ -106,8 +140,8 @@ def train():
     torch.backends.cudnn.benchmark = True
 
     # Parameters
-    params = {'batch_size': 10, 'shuffle': True, 'num_workers': 6}
-    max_epochs = 100
+    params = {'batch_size': 2, 'shuffle': True, 'num_workers': 6}
+    max_epochs = 1
 
     # Datasets
     partition = createPartition()
@@ -212,6 +246,9 @@ def train():
 
         visualize.confusionMatrix(tp, tn, fp, fn, epoch)
         accuracy = (tp + tn) / (tp + tn + fp + fn)
+
+        data_roc = ROC(testing_generator, model)
+        visualize.ROC(data_roc)
 
         print(f'accuracy = {accuracy*100:.4f}%')
 
