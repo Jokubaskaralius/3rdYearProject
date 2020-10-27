@@ -6,7 +6,6 @@ import torchvision.transforms as transforms
 from classes import Dataset, logisticRegression
 from utils import getImagePaths
 from visualize import Visualize
-from sklearn.linear_model import LogisticRegression
 
 # For reproducability
 SEED = 42
@@ -121,13 +120,13 @@ def ROC(data_generator, model):
 
 
 def get_model(n_input_features, device):
-    lr = 0.001
+    lr = 0.005
     try:
         if (device.type == 'cuda'):
             loss_func = torch.nn.BCELoss().cuda()
             model = logisticRegression(n_input_features).cuda()
     except:
-        loss_func = torch.nn.BCELoss()
+        loss_func = torch.nn.BCELoss(reduction="mean")
         model = logisticRegression(n_input_features)
     opt = optim.SGD(model.parameters(), lr=lr)
     return loss_func, model, opt
@@ -140,8 +139,13 @@ def train():
     torch.backends.cudnn.benchmark = True
 
     # Parameters
-    params = {'batch_size': 2, 'shuffle': True, 'num_workers': 6}
-    max_epochs = 1
+    params = {
+        'batch_size': 10,
+        'shuffle': True,
+        'num_workers': 4,
+        "pin_memory": True
+    }
+    max_epochs = 2000
 
     # Datasets
     partition = createPartition()
@@ -185,19 +189,18 @@ def train():
             local_labels = local_labels.view(-1, 1).float()
 
             # Model computations
-            labels_predicted = model(local_batch)
-            loss = loss_func(labels_predicted, local_labels)
+            labels_predicted = model(local_batch).cuda()
+            loss = loss_func(labels_predicted, local_labels).cuda()
             loss.backward()
             opt.step()
             opt.zero_grad()
-
             batch_loss = labels_predicted.shape[0] * loss.item()
             epoch_loss = epoch_loss + batch_loss
 
         epoch_cost = epoch_loss / len(training_set)
 
         visualize.trainingLoss(epoch, epoch_cost)
-        if (epoch + 1) % 1 == 0:
+        if (epoch + 1) % 20 == 0:
             print(f'epoch {epoch+1}, cost = {epoch_cost:.4f}')
 
         # Validation
@@ -213,8 +216,8 @@ def train():
                 local_labels = local_labels.view(-1, 1).float()
 
                 # Model computations
-                labels_predicted = model(local_batch)
-                loss = loss_func(labels_predicted, local_labels)
+                labels_predicted = model(local_batch).cuda()
+                loss = loss_func(labels_predicted, local_labels).cuda()
 
                 batch_loss = labels_predicted.shape[0] * loss.item()
                 epoch_loss = epoch_loss + batch_loss
@@ -228,7 +231,7 @@ def train():
             visualize.confusionMatrix(tp, tn, fp, fn, epoch)
 
             accuracy = (tp + tn) / (tp + tn + fp + fn)
-            if (epoch + 1) % 1 == 0:
+            if (epoch + 1) % 20 == 0:
                 print(f'epoch {epoch+1}, accuracy = {accuracy*100:.4f}%')
 
     # Testing the final accuracy of the model
@@ -245,38 +248,12 @@ def train():
                                       [tp, tn, fp, fn])
 
         visualize.confusionMatrix(tp, tn, fp, fn, epoch)
-        accuracy = (tp + tn) / (tp + tn + fp + fn)
 
         data_roc = ROC(testing_generator, model)
         visualize.ROC(data_roc)
 
+        accuracy = (tp + tn) / (tp + tn + fp + fn)
         print(f'accuracy = {accuracy*100:.4f}%')
 
 
 train()
-
-
-def train2():
-    X = list()
-    Y = list()
-    for local_batch, local_labels in training_generator:
-        X.append(np.array(local_batch)[0])
-        Y.append(np.array(local_labels)[0])
-    X = np.array(X)
-    Y = np.array(Y)
-    clf = LogisticRegression(random_state=0, max_iter=1000).fit(X, Y)
-    a = clf.score(X, Y)
-    print(a)
-
-    O = list()
-    Z = list()
-    for local_batch, local_labels in validation_generator:
-        O.append(np.array(local_batch)[0])
-        Z.append(np.array(local_labels)[0])
-    O = np.array(O)
-    Z = np.array(Z)
-    print(clf.predict(O))
-    print(Z)
-    a = clf.score(O, Z)
-    print(a)
-    print(clf.coef_.shape)
