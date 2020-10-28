@@ -67,9 +67,9 @@ def createLabels():
 #true_labels - a tensor that stores the true class of the data item in the batch
 #arr - true positive, true negative, false positive, false negative
 #returns - true positive, true negative, false positive, false negative
-def validate(labels_predicted, true_labels, arr):
+def validate(labels_predicted, true_labels, arr, p_thresh=0.5):
     tp, tn, fp, fn = arr[0], arr[1], arr[2], arr[3]
-    predicted_class = labels_predicted.round()
+    predicted_class = (labels_predicted >= p_thresh).long()
     arr = predicted_class.T.eq(true_labels)[0]
     for idx, item in enumerate(arr):
         label = int(true_labels[idx].item())
@@ -83,40 +83,6 @@ def validate(labels_predicted, true_labels, arr):
         else:
             tn = tn + 1
     return tp, tn, fp, fn
-
-
-def ROC(data_generator, model):
-    probability_thresholds = torch.linspace(0, 1, steps=10)
-    data_roc = list()
-    for p in probability_thresholds:
-        tp, tn, fp, fn = 0, 0, 0, 0
-        for local_batch, local_labels in data_generator:
-            local_batch, local_labels = local_batch.to(
-                "cuda:0"), local_labels.to("cuda:0")
-
-            local_labels = local_labels.view(-1, 1).float()
-
-            labels_predicted = model(local_batch)
-
-            predicted_class = (labels_predicted > p).long()
-
-            arr = predicted_class.T.eq(local_labels)[0]
-            for idx, item in enumerate(arr):
-                label = int(local_labels[idx].item())
-                item = bool(item.item())
-                if (item is False and label == 0):
-                    fp = fp + 1
-                elif (item is False and label == 1):
-                    fn = fn + 1
-                elif (item is True and label == 1):
-                    tp = tp + 1
-                else:
-                    tn = tn + 1
-        true_positive_rate = tp / (tp + fn)
-        false_positive_rate = fp / (fp + tn)
-        result = [float(p), true_positive_rate, false_positive_rate]
-        data_roc.append(result)
-    return data_roc
 
 
 def get_model(n_input_features, device):
@@ -133,7 +99,7 @@ def get_model(n_input_features, device):
 
 
 #https://stanford.edu/~shervine/blog/pytorch-how-to-generate-data-parallel
-def train():
+def tarain():
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
     torch.backends.cudnn.benchmark = True
@@ -145,7 +111,7 @@ def train():
         'num_workers': 4,
         "pin_memory": True
     }
-    max_epochs = 2000
+    max_epochs = 1
 
     # Datasets
     partition = createPartition()
@@ -174,14 +140,65 @@ def train():
     loss_func, model, opt = get_model(n_input_features, device)
 
     #Visualization class
-    visualize = Visualize(max_epochs)
+    visualize = Visualize()
 
     # Loop over epochs
     for epoch in range(max_epochs):
-        epoch_loss = 0.0
-        epoch_cost = 0.0
-        # Training
-        for local_batch, local_labels in training_generator:
+        #Training
+        cost = train(training_generator, model, loss_func, opt, device)
+        visualize.trainingLoss(epoch, cost)
+        if (epoch + 1) % 1 == 0:
+            print(f'epoch {epoch+1}, cost = {cost:.4f}')
+
+        #Cross validation
+        accuracy, cost = validation(validation_generator, model, loss_func,
+                                    device)
+        visualize.validationLoss(epoch, cost)
+        if (epoch + 1) % 1 == 0:
+            print(f'epoch {epoch+1}, accuracy = {accuracy*100:.4f}%')
+
+    # Testing the final accuracy of the model
+    data_ROC = list()
+    accuracy, tp, tn, fp, fn = test(testing_generator,
+                                    model,
+                                    device,
+                                    target_ROC=data_ROC)
+    visualize.confusionMatrix(tp, tn, fp, fn, epoch + 1)
+    visualize.ROC(data_ROC)
+    if (epoch + 1) % 1 == 0:
+        print(f'Final Classifier Accuracy = {accuracy*100:.4f}%')
+
+
+def train(data_generator, model, loss_func, opt, device):
+    epoch_loss = 0.0
+    epoch_cost = 0.0
+    # Training
+    for local_batch, local_labels in data_generator:
+        # Transfer to GPU
+        local_batch, local_labels = local_batch.to(device), local_labels.to(
+            device)
+
+        local_labels = local_labels.view(-1, 1).float()
+
+        # Model computations
+        labels_predicted = model(local_batch).cuda()
+        loss = loss_func(labels_predicted, local_labels).cuda()
+        loss.backward()
+        opt.step()
+        opt.zero_grad()
+        batch_loss = labels_predicted.shape[0] * loss.item()
+        epoch_loss = epoch_loss + batch_loss
+
+    epoch_cost = epoch_loss / len(data_generator.dataset)
+    return epoch_cost
+
+
+def validation(data_generator, model, loss_func, device):
+    epoch_loss = 0.0
+    epoch_cost = 0.0
+    tp, tn, fp, fn = 0, 0, 0, 0
+    with torch.set_grad_enabled(False):
+        for local_batch, local_labels in data_generator:
             # Transfer to GPU
             local_batch, local_labels = local_batch.to(
                 device), local_labels.to(device)
@@ -191,24 +208,30 @@ def train():
             # Model computations
             labels_predicted = model(local_batch).cuda()
             loss = loss_func(labels_predicted, local_labels).cuda()
-            loss.backward()
-            opt.step()
-            opt.zero_grad()
+
             batch_loss = labels_predicted.shape[0] * loss.item()
             epoch_loss = epoch_loss + batch_loss
 
-        epoch_cost = epoch_loss / len(training_set)
+            tp, tn, fp, fn = validate(labels_predicted, local_labels,
+                                      [tp, tn, fp, fn])
 
-        visualize.trainingLoss(epoch, epoch_cost)
-        if (epoch + 1) % 20 == 0:
-            print(f'epoch {epoch+1}, cost = {epoch_cost:.4f}')
+        epoch_cost = epoch_loss / len(data_generator.dataset)
 
-        # Validation
-        with torch.set_grad_enabled(False):
-            epoch_loss = 0.0
-            epoch_cost = 0.0
+        accuracy = (tp + tn) / (tp + tn + fp + fn)
+    return accuracy, epoch_cost
+
+
+def test(data_generator, model, device, target_ROC=None):
+    if target_ROC == None:
+        probability_thresholds = torch.Tensor([0.5])
+    else:
+        probability_thresholds = torch.linspace(0, 1, steps=10)
+
+    with torch.set_grad_enabled(False):
+        best_accuracy = 0
+        for p_thresh in probability_thresholds:
             tp, tn, fp, fn = 0, 0, 0, 0
-            for local_batch, local_labels in validation_generator:
+            for local_batch, local_labels in data_generator:
                 # Transfer to GPU
                 local_batch, local_labels = local_batch.to(
                     device), local_labels.to(device)
@@ -217,43 +240,32 @@ def train():
 
                 # Model computations
                 labels_predicted = model(local_batch).cuda()
-                loss = loss_func(labels_predicted, local_labels).cuda()
+                tp, tn, fp, fn = validate(labels_predicted,
+                                          local_labels, [tp, tn, fp, fn],
+                                          p_thresh=p_thresh)
 
-                batch_loss = labels_predicted.shape[0] * loss.item()
-                epoch_loss = epoch_loss + batch_loss
-
-                tp, tn, fp, fn = validate(labels_predicted, local_labels,
-                                          [tp, tn, fp, fn])
-
-            epoch_cost = epoch_loss / len(validation_set)
-
-            visualize.validationLoss(epoch, epoch_cost)
-            visualize.confusionMatrix(tp, tn, fp, fn, epoch)
+            if target_ROC != None:
+                ROC(tp, tn, fp, fn, p_thresh, target_ROC)
 
             accuracy = (tp + tn) / (tp + tn + fp + fn)
-            if (epoch + 1) % 20 == 0:
-                print(f'epoch {epoch+1}, accuracy = {accuracy*100:.4f}%')
-
-    # Testing the final accuracy of the model
-    with torch.no_grad():
-        tp, tn, fp, fn = 0, 0, 0, 0
-        accuracy = 0
-        for local_batch, local_labels in testing_generator:
-            # Transfer to GPU
-            local_batch, local_labels = local_batch.to(
-                device), local_labels.to(device)
-
-            labels_predicted = model(local_batch)
-            tp, tn, fp, fn = validate(labels_predicted, local_labels,
-                                      [tp, tn, fp, fn])
-
-        visualize.confusionMatrix(tp, tn, fp, fn, epoch)
-
-        data_roc = ROC(testing_generator, model)
-        visualize.ROC(data_roc)
-
-        accuracy = (tp + tn) / (tp + tn + fp + fn)
-        print(f'accuracy = {accuracy*100:.4f}%')
+            if (accuracy > best_accuracy):
+                best_accuracy = accuracy
+                threshold = p_thresh
+                b_tp, b_tn, b_fp, b_fn = tp, tn, fp, fn
+        print(
+            f'Best Classifier Accuracy = {accuracy*100:.4f}%, with classification threshold = {threshold}'
+        )
+    return best_accuracy, b_tp, b_tn, b_fp, b_fn
 
 
-train()
+def ROC(tp, tn, fp, fn, p_thresh, target_list):
+    if (type(target_list) != list):
+        print("Invalid target. Should be a list.")
+        return -1
+    true_positive_rate = tp / (tp + fn)
+    false_positive_rate = fp / (fp + tn)
+    result = [float(p_thresh), true_positive_rate, false_positive_rate]
+    target_list.append(result)
+
+
+tarain()
