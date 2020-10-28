@@ -99,7 +99,7 @@ def get_model(n_input_features, device):
 
 
 #https://stanford.edu/~shervine/blog/pytorch-how-to-generate-data-parallel
-def tarain():
+def classifier():
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
     torch.backends.cudnn.benchmark = True
@@ -268,4 +268,4 @@ def ROC(tp, tn, fp, fn, p_thresh, target_list):
     target_list.append(result)
 
 
-tarain()
+classifier()
