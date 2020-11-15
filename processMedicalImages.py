@@ -136,14 +136,18 @@ def getSingleDataExample(imgPathName):
         print("Incorrect MRI image format. Supported: .nii.gz")
         return -1
     data = img.get_fdata(dtype=np.float32)
+    print("Path:", imgPathName)
+
+    center_x = round(data.shape[0] / 2)
+    center_y = round(data.shape[1] / 2)
+    center_z = round(data.shape[2] / 2)
 
     if (debug):
         print("Voxel shape", data.shape)
-        print("Cropped Voxel shape", crop(data).shape)
 
-    slice_0 = data[120, :, :]
-    slice_1 = data[:, 120, :]
-    slice_2 = data[:, :, 77]
+    slice_0 = data[center_x, :, :]
+    slice_1 = data[:, center_y, :]
+    slice_2 = data[:, :, center_z]
 
     if (debug):
         print("Center slice shape of 1st dimension", slice_0.shape)
@@ -165,15 +169,18 @@ def getSingleDataExample(imgPathName):
                                norm_type=cv2.NORM_MINMAX,
                                dtype=cv2.CV_32F)
 
+    scaled = image_scale(norm_image, dim=(150, 150))
+    processed_img = scaled
+
     if (visualize_standardized):
-        plt.imshow(norm_image)
+        plt.imshow(processed_img)
         plt.show()
 
-    scaled = image_scale(norm_image, dim=(75, 75))
-    processed_img = scaled
     return processed_img
 
 
-testHGG = getSingleDataExample(
-    "/home/jokubas/DevWork/3rdYearProject/data/HGG/BraTS19_2013_2_1/BraTS19_2013_2_1_flair.nii.gz"
-)
+# path = "13_3d_axialirspgrfast.nii.gz"
+# testHGG = getSingleDataExample(
+#     #"/home/jokubas/DevWork/3rdYearProject/data/HGG/BraTS19_2013_2_1/BraTS19_2013_2_1_flair.nii.gz"
+#     "/home/jokubas/DevWork/3rdYearProject/data/nifti_TCGA_LGG/TCGA-HT-7468/06-20-1998-MRI BRAIN FOR STEREOTACTIC WWO CONTR-41849/13.000000-3D AXIALIRSPGRFast-43353/"
+#     + path)

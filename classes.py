@@ -31,7 +31,7 @@ class Dataset(torch.utils.data.Dataset):
 class logisticRegression(nn.Module):
     def __init__(self, n_input_features):
         super(logisticRegression, self).__init__()
-        self.linear = nn.Linear(n_input_features, 1)
+        self.linear = nn.Linear(n_input_features, 4)
 
     def forward(self, xb):
         return torch.sigmoid(self.linear(xb))
