@@ -83,3 +83,33 @@ def pca(arr):
     plt.title("Scree plot")
     plt.xticks(rotation=90)
     plt.show()
+
+
+##############
+#Previously the classifier was designed to classify between malignant and bening tumours
+#In other words high or low grade tumours
+#However, this has been changed to classification by grade
+##############
+#Previously accuracy calculated  #accuracy = (tp + tn) / (tp + tn + fp + fn)
+#However, now it is only measured by checking how many algorithm got wrong
+#As there is no more a binary classification
+##############
+#Previously #loss_func = torch.nn.BCELoss(reduction="mean") loss was used.
+#Need to look if Cross Entropy loss calculates the mean loss as well
+
+# def validate(labels_predicted, true_labels, arr, p_thresh=0.5):
+#     tp, tn, fp, fn = arr[0], arr[1], arr[2], arr[3]
+#     predicted_class = (labels_predicted >= p_thresh).long()
+#     arr = predicted_class.T.eq(true_labels)[0]
+#     for idx, item in enumerate(arr):
+#         label = int(true_labels[idx].item())
+#         item = bool(item.item())
+#         if (item is False and label == 0):
+#             fp = fp + 1
+#         elif (item is False and label == 1):
+#             fn = fn + 1
+#         elif (item is True and label == 1):
+#             tp = tp + 1
+#         else:
+#             tn = tn + 1
+#     return tp, tn, fp, fn

@@ -55,17 +55,16 @@ def createLabels():
     for path in imagePaths:
         dataClass = re.findall("grade[1-9]", path)[0]
         if dataClass == "grade1":
-            labels[path] = 0
+            labels[path] = torch.tensor([1, 0, 0, 0])
         elif dataClass == "grade2":
-            labels[path] = 1
+            labels[path] = torch.tensor([0, 1, 0, 0])
         elif dataClass == "grade3":
-            labels[path] = 2
+            labels[path] = torch.tensor([0, 0, 1, 0])
         elif dataClass == "grade4":
-            labels[path] = 3
+            labels[path] = torch.tensor([0, 0, 0, 1])
         else:
             print("createLabel. No such class exists. HGG or LGG")
             return -1
-
     return labels
 
 
@@ -78,15 +77,9 @@ def validate(labels_predicted, true_labels, arr, p_thresh=0.5):
     tp, tn, fp, fn = arr[0], arr[1], arr[2], arr[3]
     #predicted_class = (labels_predicted >= p_thresh).long()
     predicted_class = torch.argmax(labels_predicted, dim=1)
-    arr = predicted_class.eq(true_labels.T)[0]
-    for idx, item in enumerate(arr):
-        label = int(true_labels[idx].item())
-        item = bool(item.item())
-        if (item is False and label == 0):
-            fp = fp + 1
-        elif (item is False and label == 1):
-            fn = fn + 1
-        elif (item is True and label == 1):
+    for idx, item in enumerate(predicted_class):
+        answer = predicted_class[idx].eq(true_labels[idx])
+        if (answer.item()):
             tp = tp + 1
         else:
             tn = tn + 1
@@ -97,12 +90,10 @@ def get_model(n_input_features, device):
     lr = 0.00005
     try:
         if (device.type == 'cuda'):
-            #loss_func = torch.nn.BCELoss().cuda()
-            loss_func = torch.nn.NLLLoss()
+            loss_func = torch.nn.CrossEntropyLoss()
             model = logisticRegression(n_input_features).cuda()
     except:
-        #loss_func = torch.nn.BCELoss(reduction="mean")
-        loss_func = torch.nn.NLLLoss()
+        loss_func = torch.nn.CrossEntropyLoss()
         model = logisticRegression(n_input_features)
     opt = optim.Adam(model.parameters(), lr=lr)
     return loss_func, model, opt
@@ -116,7 +107,7 @@ def classifier():
 
     # Parameters
     params = {
-        'batch_size': 1,
+        'batch_size': 2,
         'shuffle': True,
         'num_workers': 4,
         "pin_memory": True
@@ -129,6 +120,7 @@ def classifier():
         print("Creating partition failed")
         return -1
     labels = createLabels()
+
     if (labels == -1):
         print("Creating labels failed")
         return -1
@@ -143,7 +135,7 @@ def classifier():
             plt.show()
 
     # Number of flattened features
-    n_input_features = training_set[0][0].size()[0]
+    n_input_features = torch.numel(training_set[0][0])
 
     # Generators
     training_generator = torch.utils.data.DataLoader(training_set, **params)
@@ -160,14 +152,15 @@ def classifier():
     # Loop over epochs
     for epoch in range(max_epochs):
         #Training
-        cost = train(training_generator, model, loss_func, opt, device)
+        cost = train(training_generator, model, loss_func, opt, device,
+                     n_input_features)
         visualize.trainingLoss(epoch, cost)
         if (epoch + 1) % 1 == 0:
             print(f'epoch {epoch+1}, cost = {cost:.4f}')
 
         #Cross validation
         accuracy, cost = validation(validation_generator, model, loss_func,
-                                    device)
+                                    device, n_input_features)
         visualize.validationLoss(epoch, cost)
         if (epoch + 1) % 1 == 0:
             print(f'epoch {epoch+1}, accuracy = {accuracy*100:.4f}%')
@@ -177,15 +170,16 @@ def classifier():
     accuracy, tp, tn, fp, fn = test(testing_generator,
                                     model,
                                     device,
+                                    n_input_features,
                                     target_ROC=None)
 
-    # visualize.confusionMatrix(tp, tn, fp, fn, epoch + 1)
-    # visualize.ROC(data_ROC)
+    visualize.confusionMatrix(tp, tn, fp, fn, epoch + 1)
+    visualize.ROC(data_ROC)
     if (epoch + 1) % 1 == 0:
         print(f'Final Classifier Accuracy = {accuracy*100:.4f}%')
 
 
-def train(data_generator, model, loss_func, opt, device):
+def train(data_generator, model, loss_func, opt, device, n_input_features):
     epoch_loss = 0.0
     epoch_cost = 0.0
     # Training
@@ -194,13 +188,15 @@ def train(data_generator, model, loss_func, opt, device):
         local_batch, local_labels = local_batch.to(device), local_labels.to(
             device)
 
-        local_labels = local_labels.view(-1, 1)  #.float()
+        local_batch = torch.reshape(local_batch,
+                                    (len(local_batch), n_input_features))
+        local_labels = torch.max(local_labels, 1)[1]
 
-        print("Max is: ", torch.argmax(local_batch))
-        print("Min is: ", torch.argmin(local_batch))
+        #print("Max is: ", torch.argmax(local_batch))
+        #print("Min is: ", torch.argmin(local_batch))
         # Model computations
         labels_predicted = model(local_batch).cuda()
-        loss = loss_func(labels_predicted, local_labels.flatten()).cuda()
+        loss = loss_func(labels_predicted, local_labels).cuda()
         loss.backward()
         opt.step()
         opt.zero_grad()
@@ -211,7 +207,7 @@ def train(data_generator, model, loss_func, opt, device):
     return epoch_cost
 
 
-def validation(data_generator, model, loss_func, device):
+def validation(data_generator, model, loss_func, device, n_input_features):
     epoch_loss = 0.0
     epoch_cost = 0.0
     tp, tn, fp, fn = 0, 0, 0, 0
@@ -221,11 +217,13 @@ def validation(data_generator, model, loss_func, device):
             local_batch, local_labels = local_batch.to(
                 device), local_labels.to(device)
 
-            local_labels = local_labels.view(-1, 1)  #.float()
+            local_batch = torch.reshape(local_batch,
+                                        (len(local_batch), n_input_features))
+            local_labels = torch.max(local_labels, 1)[1]
 
             # Model computations
             labels_predicted = model(local_batch).cuda()
-            loss = loss_func(labels_predicted, local_labels.flatten()).cuda()
+            loss = loss_func(labels_predicted, local_labels).cuda()
 
             batch_loss = labels_predicted.shape[0] * loss.item()
             epoch_loss = epoch_loss + batch_loss
@@ -235,11 +233,11 @@ def validation(data_generator, model, loss_func, device):
 
         epoch_cost = epoch_loss / len(data_generator.dataset)
 
-        accuracy = (tp + tn) / (tp + tn + fp + fn)
+        accuracy = tp / (tp + tn)
     return accuracy, epoch_cost
 
 
-def test(data_generator, model, device, target_ROC=None):
+def test(data_generator, model, device, n_input_features, target_ROC=None):
     if target_ROC == None:
         probability_thresholds = torch.Tensor([0.5])
     else:
@@ -254,7 +252,9 @@ def test(data_generator, model, device, target_ROC=None):
                 local_batch, local_labels = local_batch.to(
                     device), local_labels.to(device)
 
-                local_labels = local_labels.view(-1, 1).float()
+                local_batch = torch.reshape(
+                    local_batch, (len(local_batch), n_input_features))
+                local_labels = torch.max(local_labels, 1)[1]
 
                 # Model computations
                 labels_predicted = model(local_batch).cuda()
@@ -265,7 +265,7 @@ def test(data_generator, model, device, target_ROC=None):
             if target_ROC != None:
                 ROC(tp, tn, fp, fn, p_thresh, target_ROC)
 
-            accuracy = (tp + tn) / (tp + tn + fp + fn)
+            accuracy = tp / (tp + tn)
             if (accuracy > best_accuracy):
                 best_accuracy = accuracy
                 threshold = p_thresh
@@ -287,20 +287,3 @@ def ROC(tp, tn, fp, fn, p_thresh, target_list):
 
 
 classifier()
-
-# def validate(labels_predicted, true_labels, arr, p_thresh=0.5):
-#     tp, tn, fp, fn = arr[0], arr[1], arr[2], arr[3]
-#     predicted_class = (labels_predicted >= p_thresh).long()
-#     arr = predicted_class.T.eq(true_labels)[0]
-#     for idx, item in enumerate(arr):
-#         label = int(true_labels[idx].item())
-#         item = bool(item.item())
-#         if (item is False and label == 0):
-#             fp = fp + 1
-#         elif (item is False and label == 1):
-#             fn = fn + 1
-#         elif (item is True and label == 1):
-#             tp = tp + 1
-#         else:
-#             tn = tn + 1
-#     return tp, tn, fp, fn

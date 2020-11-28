@@ -4,11 +4,15 @@
 #3. Region enhancment of the tumor.
 
 import os
+import typing
+import torch
 import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
 import cv2
 import imutils
+from deepbrain import Extractor
+import multiprocessing
 
 debug = 0
 visualize_original = 0
@@ -122,6 +126,26 @@ def image_crop(image, plot=False):
     return new_image
 
 
+#Another attempt at cropping
+def crop(arr):
+    #print("Image: ", arr.shape)
+    if (type(arr).__module__ != np.__name__):
+        print("Function crop failed. Invalid argument. Pass a numpy array")
+        return -1
+    dims = arr.ndim
+    for dim in range(dims):
+        crop_dim_idx = list()
+        for idx, item in enumerate(np.rollaxis(arr, dim)):
+            is_all_zero = not np.any(item)
+            if is_all_zero:
+                crop_dim_idx.append(idx)
+        dim_cropped = np.delete(arr, crop_dim_idx, axis=dim)
+        arr = dim_cropped
+
+    #print("Cropped: ", arr.shape)
+    return arr
+
+
 #Function that processes a NIFTI format image
 #imgPathName - absolute or relative path to the NIFTI (.nii.gz) image archive.
 #label - the label passed by a calling function to specify is High grade tumour (1) or vice versa (0).
@@ -136,7 +160,7 @@ def getSingleDataExample(imgPathName):
         print("Incorrect MRI image format. Supported: .nii.gz")
         return -1
     data = img.get_fdata(dtype=np.float32)
-    print("Path:", imgPathName)
+    #print("Path:", imgPathName)
 
     center_x = round(data.shape[0] / 2)
     center_y = round(data.shape[1] / 2)
@@ -161,7 +185,39 @@ def getSingleDataExample(imgPathName):
         plt.show()
 
     image = slice_2
-    cropped_image = image_crop(image, plot=visualize_cropped)
+    #cropped_image = image_crop(image, plot=visualize_cropped)
+    cropped_image = crop(image)
+
+    if visualize_cropped:
+        plt.figure()
+        plt.subplot(1, 2, 1)
+        plt.imshow(image)
+        plt.tick_params(axis="both",
+                        which="both",
+                        top=False,
+                        bottom=False,
+                        left=False,
+                        right=False,
+                        labeltop=False,
+                        labelbottom=False,
+                        labelleft=False,
+                        labelright=False)
+        plt.title("Original Image")
+        plt.subplot(1, 2, 2)
+        plt.imshow(cropped_image)
+        plt.tick_params(axis="both",
+                        which="both",
+                        top=False,
+                        bottom=False,
+                        left=False,
+                        right=False,
+                        labeltop=False,
+                        labelbottom=False,
+                        labelleft=False,
+                        labelright=False)
+        plt.title("Cropped Image")
+        plt.show()
+
     norm_image = cv2.normalize(cropped_image,
                                None,
                                alpha=0,
@@ -179,8 +235,6 @@ def getSingleDataExample(imgPathName):
     return processed_img
 
 
-# path = "13_3d_axialirspgrfast.nii.gz"
+# path = "_5_3d_spgr_volume.nii.gz"
 # testHGG = getSingleDataExample(
-#     #"/home/jokubas/DevWork/3rdYearProject/data/HGG/BraTS19_2013_2_1/BraTS19_2013_2_1_flair.nii.gz"
-#     "/home/jokubas/DevWork/3rdYearProject/data/nifti_TCGA_LGG/TCGA-HT-7468/06-20-1998-MRI BRAIN FOR STEREOTACTIC WWO CONTR-41849/13.000000-3D AXIALIRSPGRFast-43353/"
-#     + path)
+#     "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/" + path)
