@@ -7,60 +7,48 @@ from deepbrain import Extractor
 from multiprocessing import Pool
 
 
-class Transforms():
-    def __init__(self):
-        pass
+class ToTensor():
+    def __init__(self, sample_data: np.ndarray):
+        self.sample_data = sample_data
 
-    def to_tensor(self, sample_data: np.ndarray) -> torch.Tensor:
-        sample_data = torch.from_numpy(sample_data)
+    def __call__(self):
+        sample_data = torch.from_numpy(self.sample_data)
         return sample_data
 
-    def crop(self, sample_data: np.ndarray) -> np.ndarray:
-        dims = sample_data.ndim
+
+class FeatureScaling():
+    def __init__(self, sample_data: np.ndarray, method: Optional[str] = "MN"):
+        self.sample_data = sample_data
+        if (method == "MN"):
+            self.method = method
+        else:
+            raise ValueError(
+                f'Unexpected Feature scaling method. Mean normalization - "MN" Supported only for now.\nCurrent input: {method}'
+            )
+
+    def __call__(self):
+        if (self.method == "MN"):
+            max_val = np.amax(self.sample_data)
+            mean = np.mean(self.sample_data)
+            sample_data_0_mean = np.subtract(self.sample_data, mean)
+            sample_data = np.divide(sample_data_0_mean, max_val)
+        return sample_data
+
+
+class Crop():
+    def __init__(self, sample_data: np.ndarray):
+        self.sample_data = sample_data
+
+    def __call__(self):
+        dims = self.sample_data.ndim
         for dim in range(dims):
-            crop_dim_idx = list()
-            for idx, item in enumerate(np.rollaxis(sample_data, dim)):
+            crop_dim_idx = []
+            for idx, item in enumerate(np.rollaxis(self.sample_data, dim)):
                 is_all_zero = not np.any(item)
                 if is_all_zero:
                     crop_dim_idx.append(idx)
-            dim_cropped = np.delete(sample_data, crop_dim_idx, axis=dim)
-            sample_data = dim_cropped
+            sample_data = np.delete(self.sample_data, crop_dim_idx, axis=dim)
         return sample_data
-
-    def mean_normalize(self, sample_data: np.ndarray) -> np.ndarray:
-        maxVal = np.amax(sample_data)
-        mean = np.mean(sample_data)
-        sample_data_0_mean = np.subtract(sample_data, mean)
-        sample_data = np.divide(sample_data_0_mean, maxVal)
-        return sample_data
-
-    # #this is 2D resize, need to fix it to apply to 3D as well.
-    # #https://stackoverflow.com/questions/42451217/resize-3d-stack-of-images-in-python
-    # #Not working
-    # def resize(self, sample_data: np.ndarray, shape=None) -> np.ndarray:
-    #     print(sample_data.shape)
-    #     data_shape = shape
-    #     dims = sample_data.ndim
-    #     if (shape is None):
-    #         data_shape = list()
-    #         for dim in range(dims):
-    #             scale_percent = 60
-    #             data_shape.append(
-    #                 int(sample_data.shape[dim] * scale_percent / 100))
-    #         data_shape = tuple(data_shape)
-    #     # resize image
-    #     print(data_shape)
-    #     return sample_data
-
-    # def skull_strip(self, sample_data: np.ndarray) -> np.ndarray:
-    #     with Pool(1) as p:
-    #         prob = p.apply(SkullStripProc(sample_data), ())
-    #         p.close()
-    #         p.join()
-    #     mask = prob > 0.5
-    #     mask = mask.astype(dtype=int)
-    #     sample_data = sample_data * mask
-    #     return sample_data
 
 
 class Resize():
@@ -170,13 +158,3 @@ class SkullStrip():
         ext = Extractor()
         prob = ext.run(self.sample_data)
         return prob
-
-
-# class SkullStripProc():
-#     def __init__(self, sample_data: np.ndarray):
-#         self.sample_data = sample_data
-
-#     def __call__(self) -> np.ndarray:
-#         ext = Extractor()
-#         prob = ext.run(self.sample_data)
-#         return prob

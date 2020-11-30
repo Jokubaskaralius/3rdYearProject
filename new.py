@@ -4,7 +4,7 @@ import numpy as np
 from typing import Tuple, List, Dict, Optional, Callable, Any
 import nibabel as nib
 from torch.utils.data import Dataset
-from transforms import Transforms, Resize, SkullStrip
+from transforms import Resize, SkullStrip, ToTensor, Crop, FeatureScaling
 
 # PathManager
 # Return all paths to images
@@ -131,24 +131,27 @@ class PathManager:
 
 
 class DatasetManager(PathManager):
-    def __init__(self,
-                 transforms: Optional[List[List[Any]]] = None):  #Callable,
-        #Optional[List[Any]]]]] = None):
+    def __init__(self, transforms: Optional[List[List[Any]]] = None):
         super().__init__()
         self.transforms = transforms
         if (not super().__len__()):
             raise ValueError(f'Number of source images to be non-zero')
 
     def process_images(self):
+        count = 0
         for path in self.image_paths:
             sample = self._load_sample(path)
             sample = self._apply_transform(sample)
             processed_target_path = self._project_processed_image_path(path)
-            #self._save_sample(processed_target_path, sample)
+            self._save_sample(processed_target_path, sample)
+            count = count + 1
+            print(count)
 
     def _load_sample(self, image_path: str) -> Tuple:
         try:
             img = nib.load(image_path)
+            # print(image_path)
+            # print(img.shape)
             img_header = img.header
             img_affine = img_header.get_best_affine()
         except:
@@ -183,13 +186,10 @@ class DatasetManager(PathManager):
             )
 
 
-manager = DatasetManager([
-    #[Transforms.crop, []],
-    #[Transforms.mean_normalize, []],
-    [SkullStrip, []],
-    #[Resize, [(50, 50, 10)]],
-    #[Transforms.to_tensor, []]
-])
+manager = DatasetManager(
+    [  #[Crop, []], [FeatureScaling, []], [SkullStrip, []],
+        #[Resize, [(50, 50, 10)]], [ToTensor, []]])
+    ])
 manager.process_images()
 # test_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/_5_3d_spgr_volume.nii.gz"
 # a = manager.load_sample(test_path)
