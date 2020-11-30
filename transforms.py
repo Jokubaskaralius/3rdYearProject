@@ -1,6 +1,7 @@
+import math
 import numpy as np
 import torch
-from typing import Callable
+from typing import Callable, Tuple, Any, Optional
 import cv2
 from deepbrain import Extractor
 from multiprocessing import Pool
@@ -33,61 +34,149 @@ class Transforms():
         sample_data = np.divide(sample_data_0_mean, maxVal)
         return sample_data
 
-    #this is 2D resize, need to fix.
-    #https://stackoverflow.com/questions/42451217/resize-3d-stack-of-images-in-python
-    #Not working
-    def resize(self, sample_data: np.ndarray, shape=None) -> np.ndarray:
-        print(sample_data.shape)
-        data_shape = shape
-        dims = sample_data.ndim
+    # #this is 2D resize, need to fix it to apply to 3D as well.
+    # #https://stackoverflow.com/questions/42451217/resize-3d-stack-of-images-in-python
+    # #Not working
+    # def resize(self, sample_data: np.ndarray, shape=None) -> np.ndarray:
+    #     print(sample_data.shape)
+    #     data_shape = shape
+    #     dims = sample_data.ndim
+    #     if (shape is None):
+    #         data_shape = list()
+    #         for dim in range(dims):
+    #             scale_percent = 60
+    #             data_shape.append(
+    #                 int(sample_data.shape[dim] * scale_percent / 100))
+    #         data_shape = tuple(data_shape)
+    #     # resize image
+    #     print(data_shape)
+    #     return sample_data
+
+    # def skull_strip(self, sample_data: np.ndarray) -> np.ndarray:
+    #     with Pool(1) as p:
+    #         prob = p.apply(SkullStripProc(sample_data), ())
+    #         p.close()
+    #         p.join()
+    #     mask = prob > 0.5
+    #     mask = mask.astype(dtype=int)
+    #     sample_data = sample_data * mask
+    #     return sample_data
+
+
+class Resize():
+    def __init__(self,
+                 sample_data: np.ndarray,
+                 shape: Optional[Tuple[int, ...]] = None):
+        self.sample_data = sample_data
+        self.shape = shape
+        #By default reduce size by 40 %
         if (shape is None):
+            dims = sample_data.ndim
             data_shape = list()
             for dim in range(dims):
-                scale_percent = 60
-                data_shape.append(
-                    int(sample_data.shape[dim] * scale_percent / 100))
-            data_shape = tuple(data_shape)
-        # resize image
-        print(data_shape)
+                scale_rate = 0.6
+                data_shape.append(int(sample_data.shape[dim] * 0.6))
+            self.shape = tuple(data_shape)
 
-        # if dims == 2:
-        #     sample_data = cv2.resize(sample_data,
-        #                              data_shape,
-        #                              interpolation=cv2.INTER_AREA)
-        # elif dims == 3:
-        sample_data = torch.from_numpy(sample_data)
-        torch.nn.functional.interpolate(sample_data, data_shape)
-        sample_data = sample_data.numpy()
-        # for idx in range(data_shape[2]):
-        #     img_2D = img_stack[:, :, idx]
-        #     img_2D_resized = cv2.resize(img_2D,
-        #                                 data_shape,
-        #                                 interpolation=cv2.INTER_AREA)
-        #     img_stack_sm[:, :, idx] = img_2D_resized
-        # else:
-        #     raise ValueError(
-        #         f'Unexpected data shape. Resize of 2D and 3D supported only.\nCurrent number of dimensions: {dims}'
-        #     )
+    def __call__(self):
+        dim_count = self.sample_data.ndim
+        if (dim_count == 3):
+            resized_slices = []
+            new_slices = []
+            #first we need to resize invididual 2D slices
+            for idx in range(self._slice_count()):
+                _slice = self._slice(idx)
+                _slice = self._resize_2D(_slice, self.shape[:-1])
+                resized_slices.append(_slice)
 
-        print(sample_data.shape)
+            #https://www.youtube.com/watch?v=lqhMTkouBx0
+            chunk_size = math.ceil(self._slice_count() / self.shape[-1])
+            for slice_chunk in self._chunks(resized_slices, chunk_size):
+                slice_chunk = list(map(self._mean, zip(*slice_chunk)))
+                new_slices.append(slice_chunk)
+
+            if (len(new_slices) == self.shape[-1] - 1):
+                new_slices.append(new_slices[-1])
+            if (len(new_slices) == self.shape[-1] - 2):
+                new_slices.append(new_slices[-1])
+                new_slices.append(new_slices[-1])
+
+            if (len(new_slices) == self.shape[-1] + 2):
+                new_val = list(
+                    map(
+                        self._mean,
+                        zip(*[
+                            new_slices[self.shape[-1] -
+                                       1], new_slices[self.shape[-1]]
+                        ])))
+                del new_slices[self.shape[-1]]
+                new_slices[self.shape[-1] - 1] = new_val
+            if (len(new_slices) == self.shape[-1] + 2):
+                new_val = list(
+                    map(
+                        self._mean,
+                        zip(*[
+                            new_slices[self.shape[-1] -
+                                       1], new_slices[self.shape[-1]]
+                        ])))
+                del new_slices[self.shape[-1]]
+                new_slices[self.shape[-1] - 1] = new_val
+
+            sample_data = np.array(new_slices).reshape((self.shape))
+
+        elif (dim_count == 2):
+            sample_data = self._resize_2D(self.sample_data, self.shape)
+        else:
+            raise ValueError(
+                f'Unexpected data shape. Resize of 2D and 3D supported only.\nCurrent number of dimensions: {dims}'
+            )
         return sample_data
 
-    def skull_strip(self, sample_data: np.ndarray) -> np.ndarray:
+    def _chunks(self, l: list, n: int):
+        for i in range(0, len(l), n):
+            yield l[i:i + n]
+
+    def _mean(self, l: list) -> int:
+        return sum(l) / len(l)
+
+    def _slice(self, idx: int):
+        return self.sample_data[:, :, idx]
+
+    def _slice_count(self) -> int:
+        return self.sample_data.shape[-1]
+
+    def _resize_2D(self, sample_data, shape):
+        sample_data = cv2.resize(sample_data,
+                                 shape,
+                                 interpolation=cv2.INTER_AREA)
+        return sample_data
+
+
+class SkullStrip():
+    def __init__(self, sample_data: np.ndarray) -> np.ndarray:
+        self.sample_data = sample_data
+
+    def __call__(self):
         with Pool(1) as p:
-            prob = p.apply(SkullStripProc(sample_data), ())
+            prob = p.apply(self._skull_strip_func, ())
             p.close()
             p.join()
         mask = prob > 0.5
         mask = mask.astype(dtype=int)
-        sample_data = sample_data * mask
+        sample_data = self.sample_data * mask
         return sample_data
 
-
-class SkullStripProc():
-    def __init__(self, sample_data: np.ndarray):
-        self.sample_data = sample_data
-
-    def __call__(self) -> np.ndarray:
+    def _skull_strip_func(self):
         ext = Extractor()
         prob = ext.run(self.sample_data)
         return prob
+
+
+# class SkullStripProc():
+#     def __init__(self, sample_data: np.ndarray):
+#         self.sample_data = sample_data
+
+#     def __call__(self) -> np.ndarray:
+#         ext = Extractor()
+#         prob = ext.run(self.sample_data)
+#         return prob

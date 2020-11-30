@@ -4,7 +4,7 @@ import numpy as np
 from typing import Tuple, List, Dict, Optional, Callable, Any
 import nibabel as nib
 from torch.utils.data import Dataset
-from transforms import Transforms
+from transforms import Transforms, Resize, SkullStrip
 
 # PathManager
 # Return all paths to images
@@ -69,6 +69,10 @@ class PathManager:
                         if os.path.isfile(
                             os.path.join(axial_MRI_data_path[0], f))
                     ])
+                    if (not files):
+                        raise ValueError(
+                            f'No files found in: {axial_MRI_data_path} \nSupported file image extension: .nii.gz'
+                        )
                     image_paths.append(
                         os.path.join(axial_MRI_data_path[0], files[0]))
 
@@ -139,9 +143,8 @@ class DatasetManager(PathManager):
         for path in self.image_paths:
             sample = self._load_sample(path)
             sample = self._apply_transform(sample)
-
             processed_target_path = self._project_processed_image_path(path)
-            self._save_sample(processed_target_path, sample)
+            #self._save_sample(processed_target_path, sample)
 
     def _load_sample(self, image_path: str) -> Tuple:
         try:
@@ -158,14 +161,16 @@ class DatasetManager(PathManager):
     def _apply_transform(self, sample: Tuple):
         image_data, img_affine, img_header = sample
         if (self.transforms is not None):
-            for transformList in self.transforms:
+            for Transform_list in self.transforms:
                 #item can either be a function or an argument list
-                for item in transformList:
+                for item in Transform_list:
                     if (callable(item)):
-                        transform = item
+                        Transform = item
                     else:
                         argx = item
-                image_data = transform(self, image_data, *argx)
+                transform = Transform(
+                    image_data, *argx)  #transform(self, image_data, *argx)
+                image_data = transform()
         return (image_data, img_affine, img_header)
 
     def _save_sample(self, image_path: str, sample: Tuple):
@@ -181,9 +186,9 @@ class DatasetManager(PathManager):
 manager = DatasetManager([
     #[Transforms.crop, []],
     #[Transforms.mean_normalize, []],
-    #[Transforms.skull_strip, []],
-    [Transforms.resize, []],
-    [Transforms.to_tensor, []]
+    [SkullStrip, []],
+    #[Resize, [(50, 50, 10)]],
+    #[Transforms.to_tensor, []]
 ])
 manager.process_images()
 # test_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/_5_3d_spgr_volume.nii.gz"
