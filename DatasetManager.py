@@ -1,10 +1,10 @@
 import os
 import re
+import torch
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Callable, Any
 import nibabel as nib
 from torch.utils.data import Dataset
-from transforms import Resize, SkullStrip, ToTensor, Crop, FeatureScaling
 
 # PathManager
 # Return all paths to images
@@ -13,8 +13,8 @@ from transforms import Resize, SkullStrip, ToTensor, Crop, FeatureScaling
 
 class PathManager:
     def __init__(self):
-        self.image_paths = self._project_data_image_paths(shuffle=False,
-                                                          shuffleSeed=None)
+        self.image_paths = self.unprocessed_image_paths(shuffle=False,
+                                                        shuffleSeed=None)
 
     def __repr__(self):
         pass
@@ -73,19 +73,46 @@ class PathManager:
                         raise ValueError(
                             f'No files found in: {axial_MRI_data_path} \nSupported file image extension: .nii.gz'
                         )
-                    image_paths.append(
-                        os.path.join(axial_MRI_data_path[0], files[0]))
+                    for f in files:
+                        image_paths.append(
+                            os.path.join(axial_MRI_data_path[0], f))
 
         if (shuffle):
             random.seed(shuffleSeed)
             random.shuffle(image_paths)
         return image_paths
 
-    def _project_processed_image_path(self, filepath: str) -> str:
+    def unprocessed_image_paths(
+            self,
+            shuffle: Optional[bool] = False,
+            shuffleSeed: Optional[int] = None) -> List[str]:
+        unprocessed_image_paths = []
+        all_paths = self._project_data_image_paths(shuffle=shuffle,
+                                                   shuffleSeed=shuffleSeed)
+        for path in all_paths:
+            unprocessed_image_path = re.findall("_processed", path)
+            if (not unprocessed_image_path):
+                unprocessed_image_paths.append(path)
+        return unprocessed_image_paths
+
+    def _append_processed_image_path(self, filepath: str) -> str:
         path, base, ext = self._split_filepath(filepath)
         base = base + "_processed"
         filepath = os.path.join(path, base + ext)
         return filepath
+
+    def processed_image_paths(self,
+                              shuffle: Optional[bool] = False,
+                              shuffleSeed: Optional[int] = None) -> List[str]:
+
+        processed_image_paths = []
+        all_paths = self._project_data_image_paths(shuffle=shuffle,
+                                                   shuffleSeed=shuffleSeed)
+        for path in all_paths:
+            processed_image_path = re.findall("_processed", path)
+            if (processed_image_path):
+                processed_image_paths.append(path)
+        return processed_image_paths
 
     #60 20 20 Training Validation Testing
     def create_partition(self) -> Dict[str, str]:
@@ -108,7 +135,7 @@ class PathManager:
         partition["test"] = test_dataset_paths
         return partition
 
-    def createLabels(self) -> Dict[str, str]:
+    def create_labels(self) -> Dict[str, str]:
         labels = dict()
         classes = ('grade1', 'grade2', 'grade3', 'grade4')
 
@@ -127,7 +154,14 @@ class PathManager:
 
 # DatasetManager
 # It needs to be able to open an image and return data array
-#
+# Possible use:
+############################################################
+# manager = DatasetManager(
+#    [  [Crop, []], [FeatureScaling, []], [SkullStrip, []],
+#        [Resize, [(50, 50, 10)]], [ToTensor, []]])
+#    ])
+# manager.process_images()
+############################################################
 
 
 class DatasetManager(PathManager):
@@ -142,7 +176,7 @@ class DatasetManager(PathManager):
         for path in self.image_paths:
             sample = self._load_sample(path)
             sample = self._apply_transform(sample)
-            processed_target_path = self._project_processed_image_path(path)
+            processed_target_path = self._append_processed_image_path(path)
             self._save_sample(processed_target_path, sample)
             count = count + 1
             print(count)
@@ -184,15 +218,3 @@ class DatasetManager(PathManager):
             raise ValueError(
                 f'Unexpected path: {image_path} \nExpected a path to NIFTI image. Supported image extension: .nii.gz'
             )
-
-
-manager = DatasetManager(
-    [  #[Crop, []], [FeatureScaling, []], [SkullStrip, []],
-        #[Resize, [(50, 50, 10)]], [ToTensor, []]])
-    ])
-manager.process_images()
-# test_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/_5_3d_spgr_volume.nii.gz"
-# a = manager.load_sample(test_path)
-# manager.save_sample(
-#     "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/xd_5_3d_spgr_volume.nii.gz",
-#     a)

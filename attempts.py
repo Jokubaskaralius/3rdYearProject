@@ -176,3 +176,51 @@ def pca(arr):
 #         ext = Extractor()
 #         prob = ext.run(self.sample_data)
 #         return prob
+
+# 60% training, 20% validation, 20% test
+# Need to ensure that the training set has enough LGG data for classification?
+# Also I shuffle the paths always. This might not be desirable,
+# Because It is not possible to reproduce.
+# def createPartition():
+#     partition = dict()
+#     imagePaths = getImagePaths(shuffle="yes", shuffleSeed=SEED)
+
+#     trainingDatasetCount = round(len(imagePaths) * 0.6)
+#     trainingDatasetPaths = imagePaths[:trainingDatasetCount]
+#     for path in trainingDatasetPaths:
+#         imagePaths.remove(path)
+
+#     validationDatasetCount = round(len(imagePaths) * 0.5)
+#     validationDatasetPaths = imagePaths[:validationDatasetCount]
+
+#     testDatasetCount = validationDatasetCount
+#     testDatasetPaths = imagePaths[testDatasetCount:]
+
+#     partition["train"] = trainingDatasetPaths
+#     partition["validation"] = validationDatasetPaths
+#     partition["test"] = testDatasetPaths
+#     return partition
+
+# def createLabels():
+#     labels = dict()
+#     classes = ('grade1', 'grade2', 'grade3', 'grade4')
+
+#     imagePaths = getImagePaths()
+#     if (imagePaths == -1):
+#         print("createLabels failed. imagePaths returned error status")
+#         return -1
+
+#     for path in imagePaths:
+#         dataClass = re.findall("grade[1-9]", path)[0]
+#         if dataClass == "grade1":
+#             labels[path] = torch.tensor([1, 0, 0, 0])
+#         elif dataClass == "grade2":
+#             labels[path] = torch.tensor([0, 1, 0, 0])
+#         elif dataClass == "grade3":
+#             labels[path] = torch.tensor([0, 0, 1, 0])
+#         elif dataClass == "grade4":
+#             labels[path] = torch.tensor([0, 0, 0, 1])
+#         else:
+#             print("createLabel. No such class exists. HGG or LGG")
+#             return -1
+#     return labels

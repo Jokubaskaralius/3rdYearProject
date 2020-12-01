@@ -1,3 +1,5 @@
+__all__ = ['ToTensor', 'FeatureScaling', 'Crop', 'Resize', 'SkullStrip']
+
 import math
 import numpy as np
 import torch
@@ -11,7 +13,7 @@ class ToTensor():
     def __init__(self, sample_data: np.ndarray):
         self.sample_data = sample_data
 
-    def __call__(self):
+    def __call__(self) -> torch.Tensor:
         sample_data = torch.from_numpy(self.sample_data)
         return sample_data
 
@@ -26,7 +28,7 @@ class FeatureScaling():
                 f'Unexpected Feature scaling method. Mean normalization - "MN" Supported only for now.\nCurrent input: {method}'
             )
 
-    def __call__(self):
+    def __call__(self) -> np.ndarray:
         if (self.method == "MN"):
             max_val = np.amax(self.sample_data)
             mean = np.mean(self.sample_data)
@@ -39,7 +41,7 @@ class Crop():
     def __init__(self, sample_data: np.ndarray):
         self.sample_data = sample_data
 
-    def __call__(self):
+    def __call__(self) -> np.ndarray:
         dims = self.sample_data.ndim
         for dim in range(dims):
             crop_dim_idx = []
@@ -66,7 +68,7 @@ class Resize():
                 data_shape.append(int(sample_data.shape[dim] * 0.6))
             self.shape = tuple(data_shape)
 
-    def __call__(self):
+    def __call__(self) -> np.ndarray:
         dim_count = self.sample_data.ndim
         if (dim_count == 3):
             resized_slices = []
@@ -127,13 +129,13 @@ class Resize():
     def _mean(self, l: list) -> int:
         return sum(l) / len(l)
 
-    def _slice(self, idx: int):
+    def _slice(self, idx: int) -> np.ndarray:
         return self.sample_data[:, :, idx]
 
     def _slice_count(self) -> int:
         return self.sample_data.shape[-1]
 
-    def _resize_2D(self, sample_data, shape):
+    def _resize_2D(self, sample_data, shape) -> np.ndarray:
         sample_data = cv2.resize(sample_data,
                                  shape,
                                  interpolation=cv2.INTER_AREA)
@@ -141,10 +143,10 @@ class Resize():
 
 
 class SkullStrip():
-    def __init__(self, sample_data: np.ndarray) -> np.ndarray:
+    def __init__(self, sample_data: np.ndarray):
         self.sample_data = sample_data
 
-    def __call__(self):
+    def __call__(self) -> np.ndarray:
         with Pool(1) as p:
             prob = p.apply(self._skull_strip_func, ())
             p.close()
@@ -154,7 +156,7 @@ class SkullStrip():
         sample_data = self.sample_data * mask
         return sample_data
 
-    def _skull_strip_func(self):
+    def _skull_strip_func(self) -> np.ndarray:
         ext = Extractor()
         prob = ext.run(self.sample_data)
         return prob

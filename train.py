@@ -7,6 +7,8 @@ import torchvision.transforms as transforms
 from classes import Dataset, logisticRegression
 from utils import getImagePaths
 from visualize import Visualize
+from DatasetManager import DatasetManager
+from transforms import *
 import matplotlib.pyplot as plt
 
 # For reproducability
@@ -16,56 +18,6 @@ if (type(SEED) == int):
 np.random.seed(SEED)
 
 debug_image = 0
-
-
-# 60% training, 20% validation, 20% test
-# Need to ensure that the training set has enough LGG data for classification?
-# Also I shuffle the paths always. This might not be desirable,
-# Because It is not possible to reproduce.
-def createPartition():
-    partition = dict()
-    imagePaths = getImagePaths(shuffle="yes", shuffleSeed=SEED)
-
-    trainingDatasetCount = round(len(imagePaths) * 0.6)
-    trainingDatasetPaths = imagePaths[:trainingDatasetCount]
-    for path in trainingDatasetPaths:
-        imagePaths.remove(path)
-
-    validationDatasetCount = round(len(imagePaths) * 0.5)
-    validationDatasetPaths = imagePaths[:validationDatasetCount]
-
-    testDatasetCount = validationDatasetCount
-    testDatasetPaths = imagePaths[testDatasetCount:]
-
-    partition["train"] = trainingDatasetPaths
-    partition["validation"] = validationDatasetPaths
-    partition["test"] = testDatasetPaths
-    return partition
-
-
-def createLabels():
-    labels = dict()
-    classes = ('grade1', 'grade2', 'grade3', 'grade4')
-
-    imagePaths = getImagePaths()
-    if (imagePaths == -1):
-        print("createLabels failed. imagePaths returned error status")
-        return -1
-
-    for path in imagePaths:
-        dataClass = re.findall("grade[1-9]", path)[0]
-        if dataClass == "grade1":
-            labels[path] = torch.tensor([1, 0, 0, 0])
-        elif dataClass == "grade2":
-            labels[path] = torch.tensor([0, 1, 0, 0])
-        elif dataClass == "grade3":
-            labels[path] = torch.tensor([0, 0, 1, 0])
-        elif dataClass == "grade4":
-            labels[path] = torch.tensor([0, 0, 0, 1])
-        else:
-            print("createLabel. No such class exists. HGG or LGG")
-            return -1
-    return labels
 
 
 #Use the predicted labels and true labels to check how many did the model get right
@@ -100,10 +52,19 @@ def get_model(n_input_features, device):
 
 
 #https://stanford.edu/~shervine/blog/pytorch-how-to-generate-data-parallel
-def classifier():
+def classifier(img_pre=False):
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
     torch.backends.cudnn.benchmark = True
+
+    # Pre-process the images
+    dataset_manager = DatasetManager([[Crop, []], [FeatureScaling, []],
+                                      [SkullStrip,
+                                       []], [Resize, [(50, 50, 10)]],
+                                      [ToTensor, []]])
+
+    if (img_pre):
+        dataset_manager.process_images()
 
     # Parameters
     params = {
@@ -115,15 +76,8 @@ def classifier():
     max_epochs = 5
 
     # Datasets
-    partition = createPartition()
-    if (partition == -1):
-        print("Creating partition failed")
-        return -1
-    labels = createLabels()
-
-    if (labels == -1):
-        print("Creating labels failed")
-        return -1
+    partition = dataset_manager.create_partition()
+    labels = dataset_manager.create_labels()
 
     training_set = Dataset(partition['train'], labels)
     validation_set = Dataset(partition['validation'], labels)
