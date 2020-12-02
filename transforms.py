@@ -21,19 +21,25 @@ class ToTensor():
 class FeatureScaling():
     def __init__(self, sample_data: np.ndarray, method: Optional[str] = "MN"):
         self.sample_data = sample_data
-        if (method == "MN"):
+        if (method == "MN" or method == "ZSN"):
             self.method = method
         else:
             raise ValueError(
-                f'Unexpected Feature scaling method. Mean normalization - "MN" Supported only for now.\nCurrent input: {method}'
-            )
+                f'''Unexpected Feature scaling method. Mean normalization - "MN" Supported only for now.
+                \nCurrent input: {method}''')
 
     def __call__(self) -> np.ndarray:
         if (self.method == "MN"):
             max_val = np.amax(self.sample_data)
+            min_val = np.amin(self.sample_data)
             mean = np.mean(self.sample_data)
             sample_data_0_mean = np.subtract(self.sample_data, mean)
-            sample_data = np.divide(sample_data_0_mean, max_val)
+            sample_data = np.divide(sample_data_0_mean, max_val - min_val)
+        elif (self.method == "ZSN"):
+            mean = np.mean(self.sample_data)
+            std = np.std(self.sample_data)
+            sample_data_0_mean = np.subtract(self.sample_data, mean)
+            sample_data = np.divide(sample_data_0_mean, std)
         return sample_data
 
 

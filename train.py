@@ -3,9 +3,7 @@ import numpy as np
 import torch
 import re
 from torch import optim
-import torchvision.transforms as transforms
 from classes import Dataset, logisticRegression
-from utils import getImagePaths
 from visualize import Visualize
 from DatasetManager import DatasetManager
 from transforms import *
@@ -58,7 +56,7 @@ def classifier(img_pre=False):
     torch.backends.cudnn.benchmark = True
 
     # Pre-process the images
-    dataset_manager = DatasetManager([[Crop, []], [FeatureScaling, []],
+    dataset_manager = DatasetManager([[Crop, []], [FeatureScaling, ["ZSN"]],
                                       [SkullStrip,
                                        []], [Resize, [(50, 50, 10)]],
                                       [ToTensor, []]])
@@ -73,10 +71,10 @@ def classifier(img_pre=False):
         'num_workers': 4,
         "pin_memory": True
     }
-    max_epochs = 5
+    max_epochs = 2000
 
-    # Datasets
-    partition = dataset_manager.create_partition()
+    # Pre-processed datasets
+    partition = dataset_manager.create_partition(SEED)
     labels = dataset_manager.create_labels()
 
     training_set = Dataset(partition['train'], labels)
@@ -146,8 +144,6 @@ def train(data_generator, model, loss_func, opt, device, n_input_features):
                                     (len(local_batch), n_input_features))
         local_labels = torch.max(local_labels, 1)[1]
 
-        #print("Max is: ", torch.argmax(local_batch))
-        #print("Min is: ", torch.argmin(local_batch))
         # Model computations
         labels_predicted = model(local_batch).cuda()
         loss = loss_func(labels_predicted, local_labels).cuda()
@@ -240,4 +236,4 @@ def ROC(tp, tn, fp, fn, p_thresh, target_list):
     target_list.append(result)
 
 
-classifier()
+classifier(img_pre=False)

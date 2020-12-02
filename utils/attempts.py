@@ -85,6 +85,95 @@ def pca(arr):
     plt.show()
 
 
+def getSingleDataExample(imgPathName):
+    if (os.path.isfile(imgPathName) is False):
+        print("File not found.")
+        return -1
+    try:
+        img = nib.load(imgPathName)
+    except:
+        print("Incorrect MRI image format. Supported: .nii.gz")
+        return -1
+    data = img.get_fdata(dtype=np.float32)
+    #print("Path:", imgPathName)
+
+    center_x = round(data.shape[0] / 2)
+    center_y = round(data.shape[1] / 2)
+    center_z = round(data.shape[2] / 2)
+
+    if (debug):
+        print("Voxel shape", data.shape)
+
+    slice_0 = data[center_x, :, :]
+    slice_1 = data[:, center_y, :]
+    slice_2 = data[:, :, center_z]
+
+    if (debug):
+        print("Center slice shape of 1st dimension", slice_0.shape)
+        print("Center slice shape of 2nd dimension", slice_1.shape)
+        print("Center slice shape of 3rd dimension", slice_2.shape)
+
+    if (visualize_original):
+        show_slices([slice_0, slice_1, slice_2])
+        plt.suptitle("Center slices for MRI image")
+        plt.tight_layout(pad=2.0)
+        plt.show()
+
+    image = slice_2
+    #cropped_image = image_crop(image, plot=visualize_cropped)
+    cropped_image = crop(image)
+
+    if visualize_cropped:
+        plt.figure()
+        plt.subplot(1, 2, 1)
+        plt.imshow(image)
+        plt.tick_params(axis="both",
+                        which="both",
+                        top=False,
+                        bottom=False,
+                        left=False,
+                        right=False,
+                        labeltop=False,
+                        labelbottom=False,
+                        labelleft=False,
+                        labelright=False)
+        plt.title("Original Image")
+        plt.subplot(1, 2, 2)
+        plt.imshow(cropped_image)
+        plt.tick_params(axis="both",
+                        which="both",
+                        top=False,
+                        bottom=False,
+                        left=False,
+                        right=False,
+                        labeltop=False,
+                        labelbottom=False,
+                        labelleft=False,
+                        labelright=False)
+        plt.title("Cropped Image")
+        plt.show()
+
+    norm_image = cv2.normalize(cropped_image,
+                               None,
+                               alpha=0,
+                               beta=1,
+                               norm_type=cv2.NORM_MINMAX,
+                               dtype=cv2.CV_32F)
+
+    scaled = image_scale(norm_image, dim=(150, 150))
+    processed_img = scaled
+
+    if (visualize_standardized):
+        plt.imshow(processed_img)
+        plt.show()
+
+    return processed_img
+
+
+# path = "_5_3d_spgr_volume.nii.gz"
+# testHGG = getSingleDataExample(
+#     "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/" + path)
+
 ##############
 #Previously the classifier was designed to classify between malignant and bening tumours
 #In other words high or low grade tumours
@@ -224,3 +313,75 @@ def pca(arr):
 #             print("createLabel. No such class exists. HGG or LGG")
 #             return -1
 #     return labels
+
+# def getDataClassPath():
+#     dataPath = getDataPath()
+#     HGGPath = os.path.join(dataPath, "HGG")
+#     LGGPath = os.path.join(dataPath, "LGG")
+#     if (os.path.isdir(HGGPath) is False or os.path.isdir(LGGPath) is False):
+#         print("HGG or LGG not found in projectFolder/data/")
+#         return -1
+#     return [HGGPath, LGGPath]
+
+# #Get HGG or LGG NIFTI image archive paths and sort them in lists
+# #Flair, seg, t1, t1ce and t2 in seperate lists
+# #pathName - absolute or relative path to HGG or LGG folder
+# #MRIsequence - possible MRI sequences. "all" - returns all sequences, t1 returns only t1.
+# #possible sequences: all, flair, seg, t1, t1ce, t2
+# #returns either all lists or a certain list
+# def getImagePaths(MRIsequence="all", shuffle="no", shuffleSeed=None):
+#     if (getDataClassPath == -1):
+#         print("Failed getDataClassPath")
+#         return -1
+
+#     flair = list()
+#     seg = list()
+#     t1 = list()
+#     t1ce = list()
+#     t2 = list()
+#     for dataClassPath in getDataClassPath():
+#         for idx, x in enumerate(os.walk(dataClassPath)):
+
+#             #Skip the parent directory given by os.walk in first iteration
+#             if (idx == 0):
+#                 continue
+#             imageFolder = x[0]
+#             files = sorted([
+#                 f for f in os.listdir(imageFolder)
+#                 if os.path.isfile(os.path.join(imageFolder, f))
+#             ])
+#             flair.append(os.path.join(imageFolder, files[0]))
+#             seg.append(os.path.join(imageFolder, files[1]))
+#             t1.append(os.path.join(imageFolder, files[2]))
+#             t1ce.append(os.path.join(imageFolder, files[3]))
+#             t2.append(os.path.join(imageFolder, files[4]))
+
+#     if (shuffleSeed == None or isinstance(shuffleSeed, int)):
+#         random.seed(shuffleSeed)
+
+#     if (shuffle == "yes" or shuffle == "Yes" or shuffle == "Y"
+#             or shuffle == "y"):
+#         random.shuffle(flair)
+#         random.shuffle(seg)
+#         random.shuffle(t1)
+#         random.shuffle(t1ce)
+#         random.shuffle(t2)
+
+#     if (MRIsequence == "all"):
+#         return (flair, seg, t1, t1ce, t2)
+#     elif (MRIsequence == "flair" or MRIsequence == "Flair"):
+#         return flair
+#     elif (MRIsequence == "seg" or MRIsequence == "Seg"):
+#         return seg
+#     elif (MRIsequence == "t1" or MRIsequence == "T1"):
+#         return t1
+#     elif (MRIsequence == "t1ce" or MRIsequence == "T1ce"
+#           or MRIsequence == "T1CE"):
+#         return t1ce
+#     elif (MRIsequence == "t2" or MRIsequence == "T2"):
+#         return t2
+#     else:
+#         print(
+#             "Invalid MRI sequence NIFTI image. Possible MRI sequences: flair, seg, t1, t1ce, t2"
+#         )
+#         return -1

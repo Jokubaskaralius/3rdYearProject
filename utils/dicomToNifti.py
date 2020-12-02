@@ -4,12 +4,6 @@ import re
 from shutil import copyfile
 from utils import getDataPath
 
-# dicom2nifti.convert_directory(
-#     "/home/jokubas/DevWork/3rdYearProject/data/IGT_glioma/00008/5",
-#     "/home/jokubas/DevWork/3rdYearProject/data/IGT_glioma/00008/5/",
-#     reorient=True,
-#     compression=True)
-
 
 class Dataset_dicom2nifti:
     def __init__(self, dataset, output_dir):

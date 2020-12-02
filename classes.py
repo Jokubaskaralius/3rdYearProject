@@ -1,8 +1,8 @@
 import torch
+import numpy as np
 from torch import nn
 import math
-from processMedicalImages import getSingleDataExample
-import threading
+import nibabel as nib
 #https://stanford.edu/~shervine/blog/pytorch-how-to-generate-data-parallel
 #https://medium.com/@aakashns/image-classification-using-logistic-regression-in-pytorch-ebb96cc9eb79
 #https://github.com/jcreinhold/niftidataset/blob/master/niftidataset/dataset.py
@@ -23,7 +23,16 @@ class Dataset(torch.utils.data.Dataset):
         ID = self.list_IDs[index]
 
         #Load data and get label
-        X = torch.from_numpy(getSingleDataExample(ID))  #.flatten())
+        try:
+            img = nib.load(ID)
+            image_data = img.get_fdata(dtype=np.float32)
+            image_data = torch.from_numpy(image_data)
+            image_data = torch.FloatTensor(image_data)
+        except:
+            raise ValueError(
+                f'Failed to load a processed image.\nImages may not have been processed.'
+            )
+        X = image_data
         y = self.labels[ID]
 
         return X, y
@@ -33,9 +42,10 @@ class logisticRegression(nn.Module):
     def __init__(self, n_input_features):
         super(logisticRegression, self).__init__()
         self.linear = nn.Linear(n_input_features, 4)
+        self.act = nn.Sigmoid()
 
     def forward(self, xb):
-        return self.linear(xb)
+        return self.act(self.linear(xb))
 
 
 class AverageMeter(object):

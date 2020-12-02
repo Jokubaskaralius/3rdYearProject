@@ -1,5 +1,6 @@
 import os
 import re
+import random
 import torch
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Callable, Any
@@ -13,11 +14,7 @@ from torch.utils.data import Dataset
 
 class PathManager:
     def __init__(self):
-        self.image_paths = self.unprocessed_image_paths(shuffle=False,
-                                                        shuffleSeed=None)
-
-    def __repr__(self):
-        pass
+        self.image_paths = self.unprocessed_image_paths()
 
     def __len__(self, ):
         return len(self.image_paths)
@@ -48,12 +45,7 @@ class PathManager:
         return (project_data_class_path_1, project_data_class_path_2,
                 project_data_class_path_3, project_data_class_path_4)
 
-    def _project_data_image_paths(
-            #This shouldn't be shuffling paths. The ImagePreprocessor should
-            #Only a temporary meassure.
-            self,
-            shuffle: Optional[bool] = False,
-            shuffleSeed: Optional[int] = None) -> List[str]:
+    def _project_data_image_paths(self) -> List[str]:
         data_class_paths = self._project_data_class_path()
         image_paths = list()
 
@@ -76,19 +68,11 @@ class PathManager:
                     for f in files:
                         image_paths.append(
                             os.path.join(axial_MRI_data_path[0], f))
-
-        if (shuffle):
-            random.seed(shuffleSeed)
-            random.shuffle(image_paths)
         return image_paths
 
-    def unprocessed_image_paths(
-            self,
-            shuffle: Optional[bool] = False,
-            shuffleSeed: Optional[int] = None) -> List[str]:
+    def unprocessed_image_paths(self) -> List[str]:
         unprocessed_image_paths = []
-        all_paths = self._project_data_image_paths(shuffle=shuffle,
-                                                   shuffleSeed=shuffleSeed)
+        all_paths = self._project_data_image_paths()
         for path in all_paths:
             unprocessed_image_path = re.findall("_processed", path)
             if (not unprocessed_image_path):
@@ -101,34 +85,41 @@ class PathManager:
         filepath = os.path.join(path, base + ext)
         return filepath
 
-    def processed_image_paths(self,
-                              shuffle: Optional[bool] = False,
-                              shuffleSeed: Optional[int] = None) -> List[str]:
-
+    def processed_image_paths(self) -> List[str]:
         processed_image_paths = []
-        all_paths = self._project_data_image_paths(shuffle=shuffle,
-                                                   shuffleSeed=shuffleSeed)
+        all_paths = self._project_data_image_paths()
         for path in all_paths:
             processed_image_path = re.findall("_processed", path)
             if (processed_image_path):
                 processed_image_paths.append(path)
         return processed_image_paths
 
+    def paths_shuffle(self,
+                      image_paths: List[str],
+                      shuffleSeed: Optional[int] = None) -> List[str]:
+        random.seed(shuffleSeed)
+        random.shuffle(image_paths)
+        return image_paths
+
     #60 20 20 Training Validation Testing
-    def create_partition(self) -> Dict[str, str]:
+    def create_partition(self,
+                         shuffleSeed: Optional[int] = None) -> Dict[str, str]:
         partition = dict()
-        image_paths = self.image_paths
+        processed_image_paths = self.processed_image_paths()
+        processed_image_paths = self.paths_shuffle(processed_image_paths,
+                                                   shuffleSeed=shuffleSeed)
 
-        training_dataset_count = round(self.__len__() * 0.6)
-        training_dataset_paths = image_paths[:training_dataset_count]
+        training_dataset_count = round(len(processed_image_paths) * 0.6)
+        training_dataset_paths = processed_image_paths[:training_dataset_count]
         for path in training_dataset_paths:
-            image_paths.remove(path)
+            processed_image_paths.remove(path)
 
-        validation_dataset_count = round(self.__len__() * 0.5)
-        validation_dataset_paths = image_paths[:validation_dataset_count]
+        validation_dataset_count = round(len(processed_image_paths) * 0.5)
+        validation_dataset_paths = processed_image_paths[:
+                                                         validation_dataset_count]
 
         test_dataset_count = validation_dataset_count
-        test_dataset_paths = image_paths[test_dataset_count:]
+        test_dataset_paths = processed_image_paths[test_dataset_count:]
 
         partition["train"] = training_dataset_paths
         partition["validation"] = validation_dataset_paths
@@ -138,8 +129,9 @@ class PathManager:
     def create_labels(self) -> Dict[str, str]:
         labels = dict()
         classes = ('grade1', 'grade2', 'grade3', 'grade4')
+        processed_image_paths = self.processed_image_paths()
 
-        for path in self.image_paths:
+        for path in processed_image_paths:
             data_class = re.findall("grade[1-9]", path)[0]
             if data_class == "grade1":
                 labels[path] = torch.tensor([1, 0, 0, 0])
@@ -184,8 +176,6 @@ class DatasetManager(PathManager):
     def _load_sample(self, image_path: str) -> Tuple:
         try:
             img = nib.load(image_path)
-            # print(image_path)
-            # print(img.shape)
             img_header = img.header
             img_affine = img_header.get_best_affine()
         except:
@@ -211,6 +201,7 @@ class DatasetManager(PathManager):
         return (image_data, img_affine, img_header)
 
     def _save_sample(self, image_path: str, sample: Tuple):
+        print(sample[0].shape)
         try:
             img = nib.Nifti1Image(sample[0], sample[1], sample[2])
             nib.save(img, image_path)
