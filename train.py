@@ -18,22 +18,86 @@ np.random.seed(SEED)
 debug_image = 0
 
 
+def populate_matching_matrix(labels_predicted, true_labels, matching_matrix):
+    predicted_class = torch.argmax(labels_predicted, dim=1)
+    for idx, item in enumerate(predicted_class):
+        matching_matrix[predicted_class[idx]][true_labels[
+            idx]] = matching_matrix[predicted_class[idx]][true_labels[idx]] + 1
+    return matching_matrix
+
+
+# matrix - [[tp0, tn0, fp0, fn0], [tp1, tn1, fp1, fn1], ....]
+def populate_confusion_matrix(matching_matrix, confusion_matrix):
+    for idx_row, row in enumerate(matching_matrix):
+        #get rid of the row and column of idx_row, to find true negative values
+        tn_matrix = torch.cat(
+            [matching_matrix[0:idx_row], matching_matrix[idx_row + 1:]])
+        tn_matrix = torch.t(tn_matrix)
+        tn_matrix = torch.cat([tn_matrix[0:idx_row], tn_matrix[idx_row + 1:]])
+        tn_matrix = torch.t(tn_matrix)
+
+        #true positives
+        confusion_matrix[idx_row][0] = matching_matrix[idx_row][idx_row]
+        #true negatives
+        confusion_matrix[idx_row][1] = torch.sum(tn_matrix)
+        #false positives
+        confusion_matrix[idx_row][2] = torch.sum(
+            matching_matrix[idx_row]) - matching_matrix[idx_row][idx_row]
+        #false negatives
+        col = torch.transpose(matching_matrix, 0, 1)[idx_row]
+        confusion_matrix[idx_row][3] = torch.sum(col) - col[idx_row]
+
+    return confusion_matrix
+
+
+def derive_performance_measures(confusion_matrix, performance_matrix):
+    for idx, item in enumerate(confusion_matrix):
+        true_positive = confusion_matrix[idx][0]
+        true_negative = confusion_matrix[idx][1]
+        false_positive = confusion_matrix[idx][2]
+        false_negative = confusion_matrix[idx][3]
+
+        #Accuracy
+        accuracy = torch.true_divide(
+            true_positive + true_negative,
+            true_positive + true_negative + false_positive + false_negative)
+        performance_matrix[idx][0] = accuracy
+        #Precision
+        precision = torch.true_divide(true_positive,
+                                      true_positive + false_positive)
+        performance_matrix[idx][1] = precision
+        #Recall
+        recall = torch.true_divide(true_positive,
+                                   true_positive + false_negative)
+        performance_matrix[idx][2] = recall
+        #F1-score
+        f1_score = 2 * torch.true_divide(precision * recall,
+                                         precision + recall)
+        performance_matrix[idx][3] = f1_score
+    return performance_matrix
+
+
 #Use the predicted labels and true labels to check how many did the model get right
 #labels_predicted - a tensor that contains the label predicted for each item in the batch
 #true_labels - a tensor that stores the true class of the data item in the batch
 #arr - true positive, true negative, false positive, false negative
 #returns - true positive, true negative, false positive, false negative
-def validate(labels_predicted, true_labels, arr, p_thresh=0.5):
-    tp, tn, fp, fn = arr[0], arr[1], arr[2], arr[3]
-    #predicted_class = (labels_predicted >= p_thresh).long()
-    predicted_class = torch.argmax(labels_predicted, dim=1)
-    for idx, item in enumerate(predicted_class):
-        answer = predicted_class[idx].eq(true_labels[idx])
-        if (answer.item()):
-            tp = tp + 1
-        else:
-            tn = tn + 1
-    return tp, tn, fp, fn
+# matrix - [[tp0, tn0, fp0, fn0], [tp1, tn1, fp1, fn1], ....]
+# def derive_performance_measures(validation_matrix):
+#     matrix = torch.zeros([4, 4], dtype=torch.int32)
+#     performance_matrix = torch.zeros([4, 4], dtype=torch.int32)
+
+#     for row in validation_matrix:
+#         for col in row:
+
+#     # #predicted_class = (labels_predicted >= p_thresh).long()
+#     # predicted_class = torch.argmax(labels_predicted, dim=1)
+#     # for idx, item in enumerate(predicted_class):
+#     #     validation_matrix[predicted_class[idx]][
+#     #         true_labels[idx]] = validation_matrix[predicted_class[idx]][
+#     #             true_labels[idx]] + 1
+#     #     # answer = predicted_class[idx].eq(true_labels[idx])
+#     # return validation_matrix
 
 
 def get_model(n_input_features, device):
@@ -45,6 +109,7 @@ def get_model(n_input_features, device):
     except:
         loss_func = torch.nn.CrossEntropyLoss()
         model = logisticRegression(n_input_features)
+
     opt = optim.Adam(model.parameters(), lr=lr)
     return loss_func, model, opt
 
@@ -66,12 +131,12 @@ def classifier(img_pre=False):
 
     # Parameters
     params = {
-        'batch_size': 2,
+        'batch_size': 4,
         'shuffle': True,
         'num_workers': 4,
         "pin_memory": True
     }
-    max_epochs = 2000
+    max_epochs = 1000
 
     # Pre-processed datasets
     partition = dataset_manager.create_partition(SEED)
@@ -111,24 +176,30 @@ def classifier(img_pre=False):
             print(f'epoch {epoch+1}, cost = {cost:.4f}')
 
         #Cross validation
-        accuracy, cost = validation(validation_generator, model, loss_func,
-                                    device, n_input_features)
+        matching_matrix, confusion_matrix, performance_matrix, cost = validation(
+            validation_generator, model, loss_func, device, n_input_features)
         visualize.validationLoss(epoch, cost)
-        if (epoch + 1) % 1 == 0:
-            print(f'epoch {epoch+1}, accuracy = {accuracy*100:.4f}%')
+        # if (epoch + 1) % 1 == 0:
+        #     print(f'epoch {epoch+1}, accuracy = {accuracy*100:.4f}%')
 
     # Testing the final accuracy of the model
-    data_ROC = list()
-    accuracy, tp, tn, fp, fn = test(testing_generator,
-                                    model,
-                                    device,
-                                    n_input_features,
-                                    target_ROC=None)
+    matching_matrix, confusion_matrix, performance_matrix = test(
+        testing_generator, model, device, n_input_features, target_ROC=None)
 
-    visualize.confusionMatrix(tp, tn, fp, fn, epoch + 1)
-    visualize.ROC(data_ROC)
-    if (epoch + 1) % 1 == 0:
-        print(f'Final Classifier Accuracy = {accuracy*100:.4f}%')
+    if isinstance(confusion_matrix, torch.Tensor):
+        confusion_matrix = confusion_matrix.cpu().numpy()
+
+    if isinstance(performance_matrix, torch.Tensor):
+        performance_matrix = performance_matrix.cpu().numpy()
+
+    visualize.confusionMatrix(matching_matrix, confusion_matrix,
+                              performance_matrix, epoch + 1)
+
+    # data_ROC = list()
+    # visualize.ROC(data_ROC)
+    # if (epoch + 1) % 1 == 0:
+    #     print(f'Final Classifier Accuracy = {accuracy*100:.4f}%')
+    print("Finished")
 
 
 def train(data_generator, model, loss_func, opt, device, n_input_features):
@@ -160,7 +231,9 @@ def train(data_generator, model, loss_func, opt, device, n_input_features):
 def validation(data_generator, model, loss_func, device, n_input_features):
     epoch_loss = 0.0
     epoch_cost = 0.0
-    tp, tn, fp, fn = 0, 0, 0, 0
+    matching_matrix = torch.zeros([4, 4], dtype=torch.int32)
+    confusion_matrix = torch.zeros([4, 4], dtype=torch.int32)
+    performance_matrix = torch.zeros([4, 4], dtype=torch.float32)
     with torch.set_grad_enabled(False):
         for local_batch, local_labels in data_generator:
             # Transfer to GPU
@@ -178,16 +251,23 @@ def validation(data_generator, model, loss_func, device, n_input_features):
             batch_loss = labels_predicted.shape[0] * loss.item()
             epoch_loss = epoch_loss + batch_loss
 
-            tp, tn, fp, fn = validate(labels_predicted, local_labels,
-                                      [tp, tn, fp, fn])
+            matching_matrix = populate_matching_matrix(labels_predicted,
+                                                       local_labels,
+                                                       matching_matrix)
 
+        confusion_matrix = populate_confusion_matrix(matching_matrix,
+                                                     confusion_matrix)
         epoch_cost = epoch_loss / len(data_generator.dataset)
 
-        accuracy = tp / (tp + tn)
-    return accuracy, epoch_cost
+        performance_matrix = derive_performance_measures(
+            confusion_matrix, performance_matrix)
+    return matching_matrix, confusion_matrix, performance_matrix, epoch_cost
 
 
 def test(data_generator, model, device, n_input_features, target_ROC=None):
+    matching_matrix = torch.zeros([4, 4], dtype=torch.int32)
+    confusion_matrix = torch.zeros([4, 4], dtype=torch.int32)
+    performance_matrix = torch.zeros([4, 4], dtype=torch.float32)
     if target_ROC == None:
         probability_thresholds = torch.Tensor([0.5])
     else:
@@ -208,22 +288,27 @@ def test(data_generator, model, device, n_input_features, target_ROC=None):
 
                 # Model computations
                 labels_predicted = model(local_batch).cuda()
-                tp, tn, fp, fn = validate(labels_predicted,
-                                          local_labels, [tp, tn, fp, fn],
-                                          p_thresh=p_thresh)
+                matching_matrix = populate_matching_matrix(
+                    labels_predicted, local_labels, matching_matrix)
 
             if target_ROC != None:
                 ROC(tp, tn, fp, fn, p_thresh, target_ROC)
 
-            accuracy = tp / (tp + tn)
-            if (accuracy > best_accuracy):
-                best_accuracy = accuracy
-                threshold = p_thresh
-                b_tp, b_tn, b_fp, b_fn = tp, tn, fp, fn
-        print(
-            f'Best Classifier Accuracy = {accuracy*100:.4f}%, with classification threshold = {threshold}'
-        )
-    return best_accuracy, b_tp, b_tn, b_fp, b_fn
+            confusion_matrix = populate_confusion_matrix(
+                matching_matrix, confusion_matrix)
+
+            performance_matrix = derive_performance_measures(
+                confusion_matrix, performance_matrix)
+
+        #     accuracy = tp / (tp + tn)
+        #     if (accuracy > best_accuracy):
+        #         best_accuracy = accuracy
+        #         threshold = p_thresh
+        #         b_tp, b_tn, b_fp, b_fn = tp, tn, fp, fn
+        # print(
+        #     f'Best Classifier Accuracy = {accuracy*100:.4f}%, with classification threshold = {threshold}'
+        # )
+    return matching_matrix, confusion_matrix, performance_matrix
 
 
 def ROC(tp, tn, fp, fn, p_thresh, target_list):

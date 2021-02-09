@@ -29,34 +29,53 @@ MIT License -->
         */
         var trainingLoss = $.getJSON('data/confusionMatrix.json', (data) => {     
   
+        var confusionMatrixData = data[0];
+        var precisionMatrix = data[1];
+        var epoch = data[2];
+            
+                
 		var confusionMatrix = [
-			[data[0].tp, data[0].fp],
-			[data[0].fn, data[0].tn]
+			[0, 0, 0, 0],
+			[0, 0, 0, 0],
+            [0, 0, 0, 0],
+			[0, 0, 0, 0]
 		];
 
-        var epoch = data[0].epoch;
-        var tp = confusionMatrix[0][0];
-        var fn = confusionMatrix[0][1];
-        var fp = confusionMatrix[1][0];
-        var tn = confusionMatrix[1][1];
+        for (let i = 0; i < 4; i++) {
+            confusionMatrix[i][0] = confusionMatrixData[i].m_0;
+            confusionMatrix[i][1] = confusionMatrixData[i].m_1;
+            confusionMatrix[i][2] = confusionMatrixData[i].m_2;
+            confusionMatrix[i][3] = confusionMatrixData[i].m_3;
+        }
 
-        var p = tp + fn;
-        var n = fp + tn;
 
-        var accuracy = (tp+tn)/(p+n);
-        var f1 = 2*tp/(2*tp+fp+fn);
-        var precision = tp/(tp+fp);
-        var recall = tp/(tp+fn);
-
-        accuracy = Math.round(accuracy * 100) / 100
-        f1 = Math.round(f1 * 100) / 100
-        precision = Math.round(precision * 100) / 100
-        recall = Math.round(recall * 100) / 100
-
+        var grade = 0;
+        var accuracy = 0;
+        var f1 = 0;
+        var precision = 0;
+        var recall = 0;
         var computedData = [];
+        for (grade; grade < 4; grade++) {
+            accuracy = precisionMatrix[grade].accuracy;
+            f1 = precisionMatrix[grade].f1;
+            precision = precisionMatrix[grade].precision;
+            recall = precisionMatrix[grade].recall;
+
+            accuracy = Math.round(accuracy * 100) / 100
+            f1 = Math.round(f1 * 100) / 100
+            precision = Math.round(precision * 100) / 100
+            recall = Math.round(recall * 100) / 100
+
+            // rendering a table entry
+            computedData.push({"Grade":grade+1, "F1":f1, "PRECISION":precision,"RECALL":recall,"ACCURACY":accuracy, "EPOCH":epoch});
+            var table = tabulate(computedData, ["Grade", "F1", "PRECISION","RECALL","ACCURACY","EPOCH"]);
+            computedData = []
+        }
+
+
         computedData.push({"F1":f1, "PRECISION":precision,"RECALL":recall,"ACCURACY":accuracy, "EPOCH":epoch});
 
-        var labels = ['Positive', 'Negative'];
+        var labels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4'];
 		Matrix({
 			container : '#container',
 			data      : confusionMatrix,
@@ -64,9 +83,6 @@ MIT License -->
             start_color : '#ffffff',
             end_color : '#e67e22'
 		});
-
-		// rendering the table
-         var table = tabulate(computedData, ["F1", "PRECISION","RECALL","ACCURACY","EPOCH"]);
         })
 	</script>
 </body>

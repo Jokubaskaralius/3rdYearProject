@@ -167,11 +167,12 @@ class DatasetManager(PathManager):
         count = 0
         for path in self.image_paths:
             sample = self._load_sample(path)
-            sample = self._apply_transform(sample)
+            sample = self._apply_transforms(sample)
             processed_target_path = self._append_processed_image_path(path)
             self._save_sample(processed_target_path, sample)
             count = count + 1
-            print(count)
+            print("Images processed:", count)
+        print("Image processing finished")
 
     def _load_sample(self, image_path: str) -> Tuple:
         try:
@@ -185,7 +186,7 @@ class DatasetManager(PathManager):
         image_data = img.get_fdata(dtype=np.float32)
         return (image_data, img_affine, img_header)
 
-    def _apply_transform(self, sample: Tuple):
+    def _apply_transforms(self, sample: Tuple):
         image_data, img_affine, img_header = sample
         if (self.transforms is not None):
             for Transform_list in self.transforms:
@@ -195,13 +196,11 @@ class DatasetManager(PathManager):
                         Transform = item
                     else:
                         argx = item
-                transform = Transform(
-                    image_data, *argx)  #transform(self, image_data, *argx)
+                transform = Transform(image_data, *argx)
                 image_data = transform()
         return (image_data, img_affine, img_header)
 
     def _save_sample(self, image_path: str, sample: Tuple):
-        print(sample[0].shape)
         try:
             img = nib.Nifti1Image(sample[0], sample[1], sample[2])
             nib.save(img, image_path)
