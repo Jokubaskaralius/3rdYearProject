@@ -17,9 +17,6 @@ class Visualize:
         self.epoch = list()
 
     def trainingLoss(self, epoch, loss):
-        # For now its okay, but maybe it's better to keep the state
-        # of the data dictionary, so that we would not need to
-        # iterate over the entire epoch everytime O(n^2)
         self.epoch.append(epoch)
         self.training_loss.append(loss)
         data = list()
@@ -28,9 +25,6 @@ class Visualize:
         self.exportJSON("trainingLoss", data)
 
     def validationLoss(self, epoch, loss):
-        # For now its okay, but maybe it's better to keep the state
-        # of the data dictionary, so that we would not need to
-        # iterate over the entire epoch everytime O(n^2)
         self.validation_loss.append(loss)
         data = list()
         for i in self.epoch:
@@ -38,37 +32,38 @@ class Visualize:
 
         self.exportJSON("validationLoss", data)
 
-    def confusionMatrix(self, matching_matrix, confusion_matrix,
-                        performance_matrix, epoch):
-        matching_list = list()
-        for idx, row in enumerate(matching_matrix):
-            matching_dict = dict()
-            matching_dict["m_0"] = int(row[0])
-            matching_dict["m_1"] = int(row[1])
-            matching_dict["m_2"] = int(row[2])
-            matching_dict["m_3"] = int(row[3])
-            matching_list.append(matching_dict)
+    def confusionMatrix(self, performance_list, epoch):
+        matching_matrix_list = list()
+        confusion_matrix_list = list()
+        performance_matrix_list = list()
+        for fold_performance_measures in performance_list:
+            matching_matrix = list()
+            for idx, row in enumerate(fold_performance_measures[0]):
+                for idy, col in enumerate(row):
+                    matching_matrix.append(int(col))
+            matching_matrix_list.append(matching_matrix)
 
-        confusion_list = list()
-        # for idx, row in enumerate(confusion_matrix):
-        #     confusion_dict = dict()
-        #     confusion_dict["tp"] = int(row[0])
-        #     confusion_dict["tn"] = int(row[1])
-        #     confusion_dict["fp"] = int(row[2])
-        #     confusion_dict["fn"] = int(row[3])
-        #     confusion_list.append(confusion_dict)
+            confusion_matrix = list()
+            for idx, row in enumerate(fold_performance_measures[1]):
+                for idy, col in enumerate(row):
+                    confusion_matrix.append(int(col))
+            confusion_matrix_list.append(confusion_matrix)
 
-        performance_list = list()
-        for idx, row in enumerate(performance_matrix):
-            performance_dict = dict()
-            performance_dict["accuracy"] = float(row[0])
-            performance_dict["precision"] = float(row[1])
-            performance_dict["recall"] = float(row[2])
-            performance_dict["f1"] = float(row[3])
-            performance_list.append(performance_dict)
+            performance_matrix = list()
+            for idx, row in enumerate(fold_performance_measures[2]):
+                for idy, col in enumerate(row):
+                    # print(col)
+                    # print()
+                    # print(float(col))
+                    performance_matrix.append(float(col))
+            performance_matrix_list.append(performance_matrix)
 
-        self.exportJSON("confusionMatrix",
-                        [matching_list, performance_list, epoch])
+        self.exportJSON("confusionMatrix", [{
+            "matching_matrix_list": matching_matrix_list,
+            "confusion_matrix_list": confusion_matrix_list,
+            "performance_matrix_list": performance_matrix_list,
+            "epoch": epoch
+        }])
 
     def ROC(self, data):
         data_roc = list()

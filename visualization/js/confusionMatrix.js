@@ -7,8 +7,8 @@ MIT License */
 var margin = { top: 50, right: 50, bottom: 100, left: 100 };
 
 function Matrix(options) {
-  var width = 500,
-    height = 500,
+  var width = options.width,
+    height = options.height,
     data = options.data,
     container = options.container,
     labelsData = options.labels,

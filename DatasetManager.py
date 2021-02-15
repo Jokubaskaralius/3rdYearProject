@@ -101,9 +101,20 @@ class PathManager:
         random.shuffle(image_paths)
         return image_paths
 
-    #60 20 20 Training Validation Testing
+    #100% to Training
     def create_partition(self,
                          shuffleSeed: Optional[int] = None) -> Dict[str, str]:
+        partition = dict()
+        processed_image_paths = self.processed_image_paths()
+        processed_image_paths = self.paths_shuffle(processed_image_paths,
+                                                   shuffleSeed=shuffleSeed)
+
+        partition["dataset"] = processed_image_paths
+        return partition
+
+    #60 20 20 Training Validation Testing
+    def create_partitions(self,
+                          shuffleSeed: Optional[int] = None) -> Dict[str, str]:
         partition = dict()
         processed_image_paths = self.processed_image_paths()
         processed_image_paths = self.paths_shuffle(processed_image_paths,

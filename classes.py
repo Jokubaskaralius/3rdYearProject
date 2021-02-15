@@ -39,9 +39,9 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class logisticRegression(nn.Module):
-    def __init__(self, n_input_features):
+    def __init__(self, input_dim, output_dim):
         super(logisticRegression, self).__init__()
-        self.linear = nn.Linear(n_input_features, 4)
+        self.linear = nn.Linear(input_dim, output_dim)  # output dim 4
         self.act = nn.Sigmoid()
 
     def forward(self, xb):
