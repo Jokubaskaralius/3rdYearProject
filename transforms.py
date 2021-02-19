@@ -21,7 +21,7 @@ class ToTensor():
 class FeatureScaling():
     def __init__(self, sample_data: np.ndarray, method: Optional[str] = "MN"):
         self.sample_data = sample_data
-        if (method == "MN" or method == "ZSN"):
+        if (method == "MN" or method == "ZSN" or method == "MM"):
             self.method = method
         else:
             raise ValueError(
@@ -29,6 +29,11 @@ class FeatureScaling():
                 \nCurrent input: {method}''')
 
     def __call__(self) -> np.ndarray:
+        if (self.method == "MM"):
+            max_val = np.amax(self.sample_data)
+            min_val = np.amin(self.sample_data)
+            sample_data_temp = np.subtract(self.sample_data, min_val)
+            sample_data = np.divide(sample_data_temp, max_val - min_val)
         if (self.method == "MN"):
             max_val = np.amax(self.sample_data)
             min_val = np.amin(self.sample_data)
@@ -52,6 +57,7 @@ class Crop():
         for dim in range(dims):
             crop_dim_idx = []
             for idx, item in enumerate(np.rollaxis(self.sample_data, dim)):
+
                 is_all_zero = not np.any(item)
                 if is_all_zero:
                     crop_dim_idx.append(idx)

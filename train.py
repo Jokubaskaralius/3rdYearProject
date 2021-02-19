@@ -136,10 +136,6 @@ def validation(device, data_loader, model, input_dim):
         performance_matrix = derive_performance_measures(
             confusion_matrix, performance_matrix)
 
-        print(confusion_matrix)
-        print()
-        print(performance_matrix)
-        print()
         epoch_cost = epoch_loss / len(data_loader.dataset)
 
     return matching_matrix, confusion_matrix, performance_matrix, epoch_cost
@@ -220,10 +216,14 @@ def main():
     #
 
     # Dataset
-    dataset_manager = DatasetManager([[Crop, []], [FeatureScaling, ["ZSN"]],
-                                      [SkullStrip,
-                                       []], [Resize, [(50, 50, 10)]],
-                                      [ToTensor, []]])
+    dataset_manager = DatasetManager([
+        #[Crop, []],
+        [FeatureScaling, ["MM"]],
+        #[SkullStrip, []],
+        [Resize, [(50, 50, 10)]],
+        [ToTensor, []]
+    ])
+    dataset_manager.process_images()
     partition = dataset_manager.create_partition(args.seed)
     labels = dataset_manager.create_labels()
 

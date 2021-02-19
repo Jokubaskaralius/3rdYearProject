@@ -185,6 +185,13 @@ class DatasetManager(PathManager):
             print("Images processed:", count)
         print("Image processing finished")
 
+    def process_image(self, image_path: str):
+        sample = self._load_sample(image_path)
+        sample = self._apply_transforms(sample)
+        processed_target_path = self._append_processed_image_path(image_path)
+        self._save_sample(processed_target_path, sample)
+        print("Image processed")
+
     def _load_sample(self, image_path: str) -> Tuple:
         try:
             img = nib.load(image_path)

@@ -13,7 +13,8 @@ function Matrix(options) {
     container = options.container,
     labelsData = options.labels,
     startColor = options.start_color,
-    endColor = options.end_color;
+    endColor = options.end_color,
+    fold = options.fold;
 
   var widthLegend = 100;
 
@@ -41,6 +42,17 @@ function Matrix(options) {
 
   var svg = d3
     .select(container)
+    .style("width", "100%")
+    .append("text")
+    .text(`Fold number: ${fold}`)
+    .attr("class", "text")
+    .style("text-align", "center")
+    .style("display", "block")
+    .append("div")
+    .attr("class", `entry-${fold}`)
+    .style("display", "flex")
+    .style("align-items", "center")
+    .style("justify-content", "center")
     .append("svg")
     .attr("width", width + margin.left + margin.right)
     .attr("height", height + margin.top + margin.bottom)
@@ -113,6 +125,7 @@ function Matrix(options) {
 
   var labels = svg.append("g").attr("class", "labels");
 
+  var colLabelHeight = height + 20;
   var columnLabels = labels
     .selectAll(".column-label")
     .data(labelsData)
@@ -120,7 +133,7 @@ function Matrix(options) {
     .append("g")
     .attr("class", "column-label")
     .attr("transform", function (d, i) {
-      return "translate(" + x(i) + "," + height + ")";
+      return "translate(" + x(i) + "," + colLabelHeight + ")";
     });
 
   columnLabels
@@ -173,7 +186,7 @@ function Matrix(options) {
     });
 
   var key = d3
-    .select("#legend")
+    .select(`.entry-${fold}`)
     .append("svg")
     .attr("width", widthLegend)
     .attr("height", height + margin.top + margin.bottom);
@@ -220,8 +233,9 @@ function Matrix(options) {
 
 // The table generation function
 function tabulate(data, columns) {
+  var fold = data[0].Fold;
   var table = d3
-      .select("#dataView")
+      .select(`.entry-${fold}`)
       .append("table")
       .attr("style", "margin-left: " + margin.left + "px"),
     thead = table.append("thead"),

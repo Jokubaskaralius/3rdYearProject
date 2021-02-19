@@ -33,6 +33,9 @@ class Visualize:
         self.exportJSON("validationLoss", data)
 
     def confusionMatrix(self, performance_list, epoch):
+        def slice_per(source, step):
+            return [source[i::step] for i in range(step)]
+
         matching_matrix_list = list()
         confusion_matrix_list = list()
         performance_matrix_list = list()
@@ -52,11 +55,11 @@ class Visualize:
             performance_matrix = list()
             for idx, row in enumerate(fold_performance_measures[2]):
                 for idy, col in enumerate(row):
-                    # print(col)
-                    # print()
-                    # print(float(col))
-                    performance_matrix.append(float(col))
-            performance_matrix_list.append(performance_matrix)
+                    performance_matrix.append(float("{:.2f}".format(col)))
+
+            performance_matrix_list.append(
+                slice_per(performance_matrix,
+                          len(fold_performance_measures[2][0])))
 
         self.exportJSON("confusionMatrix", [{
             "matching_matrix_list": matching_matrix_list,
@@ -205,4 +208,53 @@ def debug():
     dataset_plot_3D()
 
 
+#https://nipy.org/nibabel/coordinate_systems.html
+def show_slices(slices):
+    #Function to display row of image slices
+    fig, axes = plt.subplots(1, len(slices))
+    for i, slice in enumerate(slices):
+        axes[i].imshow(slice.T, cmap="gray", origin="lower")
+
+
+def visualizeImage():
+    processed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/_5_3d_spgr_volume_processed.nii.gz"
+    unprocessed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/_5_3d_spgr_volume.nii.gz"
+
+    dataset_manager = DatasetManager([
+        [FeatureScaling, ["MM"]],
+        [Crop, []],
+        #[SkullStrip, []],  #[Resize, [(50, 50, 10)]],
+        #[ToTensor, []]
+    ])
+    dataset_manager.process_image(unprocessed_image_path)
+
+    img_proc = nib.load(processed_image_path)
+    img_unproc = nib.load(unprocessed_image_path)
+
+    data_proc = img_proc.get_fdata()
+    data_unproc = img_unproc.get_fdata()
+
+    print("Processed image shape", data_proc.shape)
+    print("Unprocessed image shape", data_unproc.shape)
+
+    slice_0_proc = data_proc[128, :, :]
+    slice_1_proc = data_proc[:, 128, :]
+    slice_2_proc = data_proc[:, :, 30]
+
+    slice_0_unproc = data_unproc[128, :, :]
+    slice_1_unproc = data_unproc[:, 128, :]
+    slice_2_unproc = data_unproc[:, :, 30]
+
+    show_slices([slice_0_proc, slice_1_proc, slice_2_proc])
+    plt.suptitle("Center slices for processed MRI image")
+    plt.tight_layout(pad=2.0)
+    plt.show()
+
+    show_slices([slice_0_unproc, slice_1_unproc, slice_2_unproc])
+    plt.suptitle("Center slices for unprocessed MRI image")
+    plt.tight_layout(pad=2.0)
+    plt.show()
+
+
+#visualizeImage()
 #debug()
