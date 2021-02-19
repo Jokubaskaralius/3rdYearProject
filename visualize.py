@@ -50,7 +50,9 @@ class Visualize:
             for idx, row in enumerate(fold_performance_measures[1]):
                 for idy, col in enumerate(row):
                     confusion_matrix.append(int(col))
-            confusion_matrix_list.append(confusion_matrix)
+            confusion_matrix_list.append(
+                slice_per(confusion_matrix,
+                          len(fold_performance_measures[1][0])))
 
             performance_matrix = list()
             for idx, row in enumerate(fold_performance_measures[2]):

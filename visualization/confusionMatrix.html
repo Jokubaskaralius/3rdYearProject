@@ -16,8 +16,9 @@ MIT License -->
 </head>
 <body>
 
+    <h1 style="text-align:center">Averaged Performance Results</h1>
     <div id="dataView"></div>
-    <div style="display:inline-block; float:left" id="container"></div>
+    <div style="display:flex; float:left; align-items: center; justify-content: center; width: 100%; height: 60vh;" id="container"></div>
     <div style="display:inline-block; float:left" id="legend"></div>
 
     <script src="js/confusionMatrix.js"></script>
@@ -27,62 +28,75 @@ MIT License -->
         /* My work consists of importing a JSON file and using the data in that file
            to produce the right results in the rendered Confusion matrix.
         */
-        var confusion_matrix = $.getJSON('data/confusionMatrix.json', (data) => {
+        var performance_results = $.getJSON('data/confusionMatrix.json', (data) => {
 
-        
-
-        var matchingMatrixData = data[0]["matching_matrix_list"];
         var confusionMatrixData = data[0]["confusion_matrix_list"];
         var performanceMatrixData = data[0]["performance_matrix_list"];
         var epoch = data[0]["epoch"];
 
-        var confusionMatrix = [];
-
-
+        var fold_num = performanceMatrixData.length;
+        var grade_num = performanceMatrixData[0].length;
         
+        /* Macro average per fold */
+        var [accuracy_fold_sum, precision_fold_sum, recall_fold_sum, f1_fold_sum] = [0, 0, 0, 0];
+        var accuracy_macro_fold_average = [], precision_macro_fold_average = [], recall_macro_fold_average = [], f1_macro_fold_average = [];
 
-        for (let i = 0; i < 4; i++) {
-            confusionMatrix[i][0] = confusionMatrixData[i].m_0;
-            confusionMatrix[i][1] = confusionMatrixData[i].m_1;
-            confusionMatrix[i][2] = confusionMatrixData[i].m_2;
-            confusionMatrix[i][3] = confusionMatrixData[i].m_3;
+        for (let fold = 0; fold < fold_num; fold++) {
+            for (let grade = 0; grade < grade_num; grade++) {
+                accuracy_fold_sum += performanceMatrixData[fold][grade][0];
+                precision_fold_sum += performanceMatrixData[fold][grade][1]
+                recall_fold_sum += performanceMatrixData[fold][grade][2] 
+                f1_fold_sum += performanceMatrixData[fold][grade][3] 
+            }
+            accuracy_macro_fold_average.push(accuracy_fold_sum / grade_num);
+            precision_macro_fold_average.push(precision_fold_sum / grade_num);
+            recall_macro_fold_average.push(recall_fold_sum / grade_num);
+            f1_macro_fold_average.push(f1_fold_sum / grade_num);
+            accuracy_fold_sum = 0, precision_fold_sum = 0, recall_fold_sum = 0, f1_fold_sum = 0;
         }
 
+        /* Compute Macro averages */
+        var accuracy_macro_average = accuracy_macro_fold_average.reduce((a, b) => a + b, 0) / fold_num;
+        var precision_macro_average = precision_macro_fold_average.reduce((a, b) => a + b, 0) / fold_num;
+        var recall_macro_average = recall_macro_fold_average.reduce((a, b) => a + b, 0) / fold_num;
+        var f1_macro_average = f1_macro_fold_average.reduce((a, b) => a + b, 0) / fold_num;
 
-        var grade = 0;
-        var accuracy = 0;
-        var f1 = 0;
-        var precision = 0;
-        var recall = 0;
-        var computedData = [];
-        for (grade; grade < 4; grade++) {
-            accuracy = precisionMatrix[grade].accuracy;
-            f1 = precisionMatrix[grade].f1;
-            precision = precisionMatrix[grade].precision;
-            recall = precisionMatrix[grade].recall;
 
-            accuracy = Math.round(accuracy * 100) / 100
-            f1 = Math.round(f1 * 100) / 100
-            precision = Math.round(precision * 100) / 100
-            recall = Math.round(recall * 100) / 100
 
-            // rendering a table entry
-            computedData.push({"Grade":grade+1, "F1":f1, "PRECISION":precision,"RECALL":recall,"ACCURACY":accuracy, "EPOCH":epoch});
-            var table = tabulate(computedData, ["Grade", "F1", "PRECISION","RECALL","ACCURACY","EPOCH"]);
-            computedData = []
+        /* Micro average per fold */
+        var [TP_fold_sum, TN_fold_sum, FP_fold_sum, FN_fold_sum] = [0,0,0,0];
+        var accuracy_micro_fold_average = [], precision_micro_fold_average = [], recall_micro_fold_average = [], f1_micro_fold_average = [];
+
+        for (let fold = 0; fold < fold_num; fold++) {
+            for (let grade = 0; grade < grade_num; grade++) {
+                TP_fold_sum += confusionMatrixData[fold][grade][0];
+                TN_fold_sum += confusionMatrixData[fold][grade][1];
+                FP_fold_sum += confusionMatrixData[fold][grade][2];
+                FN_fold_sum += confusionMatrixData[fold][grade][3];
+            }
+            accuracy_micro_fold_average.push((TP_fold_sum + TN_fold_sum)/(TP_fold_sum + TN_fold_sum + FP_fold_sum + FN_fold_sum));
+            let precision = TP_fold_sum / (TP_fold_sum + FP_fold_sum);
+            precision_micro_fold_average.push(precision);
+            let recall = TP_fold_sum / (TP_fold_sum + FN_fold_sum);
+            recall_micro_fold_average.push(recall);
+            f1_micro_fold_average.push(2 * precision * recall / (precision + recall))
+
+            TP_fold_sum = 0, TN_fold_sum = 0, FP_fold_sum = 0, FN_fold_sum = 0;
         }
-        var labels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4'];
-        Matrix({
-            width: 200,
-            height: 200,
-			container : '#container',
-			data      : confusionMatrix,
-			labels    : labels,
-            start_color : '#ffffff',
-            end_color : '#e67e22'
-		    });
-        computedData.push({"F1":f1, "PRECISION":precision,"RECALL":recall,"ACCURACY":accuracy, "EPOCH":epoch});
+        /* Compute Micro averages */
+        var accuracy_micro_average = accuracy_micro_fold_average.reduce((a, b) => a + b, 0) / fold_num;
+        var precision_micro_average = precision_micro_fold_average.reduce((a, b) => a + b, 0) / fold_num;
+        var recall_micro_average = recall_micro_fold_average.reduce((a, b) => a + b, 0) / fold_num;
+        var f1_micro_average = f1_micro_fold_average.reduce((a, b) => a + b, 0) / fold_num;
+
+
+        var macro_data = [{"ACCURACY": accuracy_macro_average.toFixed(3), "PRECISION": precision_macro_average.toFixed(3), "RECALL": recall_macro_average.toFixed(3), "F1": f1_macro_average.toFixed(3), "EPOCH": epoch, "title": "Macro average"}];
+        var micro_data = [{"ACCURACY": accuracy_micro_average.toFixed(3), "PRECISION": precision_micro_average.toFixed(3), "RECALL": recall_micro_average.toFixed(3), "F1": f1_micro_average.toFixed(3), "EPOCH": epoch, "title": "Micro average"}];
         
+
+        var macro_table = tabulate_2(macro_data, ["PRECISION","RECALL", "F1", "ACCURACY","EPOCH"]);
+        var micro_table = tabulate_2(micro_data, ["PRECISION","RECALL", "F1", "ACCURACY","EPOCH"]);
+
         })
 	</script>
 </body>

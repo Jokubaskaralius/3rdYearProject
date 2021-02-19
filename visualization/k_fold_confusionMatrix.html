@@ -40,8 +40,7 @@ MIT License -->
         var confusionMatrix = [];
         var labels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4'];
 
-        for (let fold = 0; fold < matchingMatrixData.length; fold++) {
-            let temp = 0;
+        for (let fold = 0; fold < performanceMatrixData.length; fold++) {
             while(matchingMatrixData[fold].length) confusionMatrix.push(matchingMatrixData[fold].splice(0,4));
             Matrix({
             width: 200,
@@ -74,17 +73,7 @@ MIT License -->
         }
             var table = tabulate(computedData, ["Grade", "F1", "PRECISION","RECALL","ACCURACY","EPOCH"]);
             computedData = []
-    }
-
-
-            // accuracy = Math.round(accuracy * 100) / 100
-            // f1 = Math.round(f1 * 100) / 100
-            // precision = Math.round(precision * 100) / 100
-            // recall = Math.round(recall * 100) / 100
-
-
-        //computedData.push({"F1":f1, "PRECISION":precision,"RECALL":recall,"ACCURACY":accuracy, "EPOCH":epoch});
-        
+    }   
         })
 	</script>
 </body>

@@ -233,11 +233,55 @@ function Matrix(options) {
 
 // The table generation function
 function tabulate(data, columns) {
-  var fold = data[0].Fold;
+  if (data[0].Fold) var fold = data[0].Fold;
   var table = d3
       .select(`.entry-${fold}`)
       .append("table")
       .attr("style", "margin-left: " + margin.left + "px"),
+    thead = table.append("thead"),
+    tbody = table.append("tbody");
+
+  // append the header row
+  thead
+    .append("tr")
+    .selectAll("th")
+    .data(columns)
+    .enter()
+    .append("th")
+    .text(function (column) {
+      return column;
+    });
+
+  // create a row for each object in the data
+  var rows = tbody.selectAll("tr").data(data).enter().append("tr");
+
+  // create a cell in each row for each column
+  var cells = rows
+    .selectAll("td")
+    .data(function (row) {
+      return columns.map(function (column) {
+        return { column: column, value: row[column] };
+      });
+    })
+    .enter()
+    .append("td")
+    .attr("style", "font-family: Courier") // sets the font style
+    .html(function (d) {
+      return d.value;
+    });
+
+  return table;
+}
+
+function tabulate_2(data, columns) {
+  if (data[0].Fold) var fold = data[0].Fold;
+  var table = d3
+      .select("#container")
+      .append("text")
+      .text(`${data[0].title}`)
+      .style("text-align", "center")
+      .append("table")
+      .attr("style", "margin: " + 5 + "px" + " " + margin.left + "px"),
     thead = table.append("thead"),
     tbody = table.append("tbody");
 
