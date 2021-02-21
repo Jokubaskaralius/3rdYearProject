@@ -385,3 +385,82 @@ def getSingleDataExample(imgPathName):
 #             "Invalid MRI sequence NIFTI image. Possible MRI sequences: flair, seg, t1, t1ce, t2"
 #         )
 #         return -1
+
+# class Resize():
+#     def __init__(self, sample_data: np.ndarray, shape: Optional[Tuple[int,
+#                                                                       ...]]):
+#         self.sample_data = sample_data
+#         self.shape = shape
+
+#     def __call__(self) -> np.ndarray:
+#         dim_count = self.sample_data.ndim
+#         if (dim_count == 3):
+#             resized_slices = []
+#             new_slices = []
+#             #first we need to resize invididual 2D slices
+#             for idx in range(self._slice_count()):
+#                 _slice = self._slice(idx)
+#                 _slice = self._resize_2D(_slice, self.shape[:-1])
+#                 resized_slices.append(_slice)
+
+#             #https://www.youtube.com/watch?v=lqhMTkouBx0
+#             chunk_size = math.ceil(self._slice_count() / self.shape[-1])
+#             for slice_chunk in self._chunks(resized_slices, chunk_size):
+#                 slice_chunk = list(map(self._mean, zip(*slice_chunk)))
+#                 new_slices.append(slice_chunk)
+
+#             if (len(new_slices) == self.shape[-1] - 1):
+#                 new_slices.append(new_slices[-1])
+#             if (len(new_slices) == self.shape[-1] - 2):
+#                 new_slices.append(new_slices[-1])
+#                 new_slices.append(new_slices[-1])
+
+#             if (len(new_slices) == self.shape[-1] + 2):
+#                 new_val = list(
+#                     map(
+#                         self._mean,
+#                         zip(*[
+#                             new_slices[self.shape[-1] -
+#                                        1], new_slices[self.shape[-1]]
+#                         ])))
+#                 del new_slices[self.shape[-1]]
+#                 new_slices[self.shape[-1] - 1] = new_val
+#             if (len(new_slices) == self.shape[-1] + 2):
+#                 new_val = list(
+#                     map(
+#                         self._mean,
+#                         zip(*[
+#                             new_slices[self.shape[-1] -
+#                                        1], new_slices[self.shape[-1]]
+#                         ])))
+#                 del new_slices[self.shape[-1]]
+#                 new_slices[self.shape[-1] - 1] = new_val
+
+#             sample_data = np.array(new_slices).reshape((self.shape))
+
+#         elif (dim_count == 2):
+#             sample_data = self._resize_2D(self.sample_data, self.shape)
+#         else:
+#             raise ValueError(
+#                 f'Unexpected data shape. Resize of 2D and 3D supported only.\nCurrent number of dimensions: {dims}'
+#             )
+#         return sample_data
+
+#     def _chunks(self, l: list, n: int):
+#         for i in range(0, len(l), n):
+#             yield l[i:i + n]
+
+#     def _mean(self, l: list) -> int:
+#         return sum(l) / len(l)
+
+#     def _slice(self, idx: int) -> np.ndarray:
+#         return self.sample_data[:, :, idx]
+
+#     def _slice_count(self) -> int:
+#         return self.sample_data.shape[-1]
+
+#     def _resize_2D(self, sample_data, shape) -> np.ndarray:
+#         sample_data = cv2.resize(sample_data,
+#                                  shape,
+#                                  interpolation=cv2.INTER_AREA)
+#         return sample_data

@@ -224,8 +224,9 @@ def visualizeImage():
 
     dataset_manager = DatasetManager([
         [FeatureScaling, ["MM"]],
+        [Crop, []],
+        [Resize, [(100, 100, 56)]],
         #[SkullStrip, []],
-        [Crop, []],  #[Resize, [(50, 50, 10)]],
         #[ToTensor, []]
     ])
     dataset_manager.process_image(unprocessed_image_path)
@@ -239,9 +240,14 @@ def visualizeImage():
     print("Processed image shape", data_proc.shape)
     print("Unprocessed image shape", data_unproc.shape)
 
-    slice_0_proc = data_proc[83, :, :]
-    slice_1_proc = data_proc[:, 105, :]
-    slice_2_proc = data_proc[:, :, 84]
+    slice_0_proc = data_proc[50, :, :]
+    slice_1_proc = data_proc[:, 50, :]
+    slice_2_proc = data_proc[:, :, 28]
+
+    # slice demo for cropping
+    # slice_0_proc = data_proc[83, :, :]
+    # slice_1_proc = data_proc[:, 105, :]
+    # slice_2_proc = data_proc[:, :, 84]
 
     slice_0_unproc = data_unproc[128, :, :]
     slice_1_unproc = data_unproc[:, 128, :]

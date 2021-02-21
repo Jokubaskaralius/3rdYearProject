@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from typing import Callable, Tuple, Any, Optional
 import cv2
+import skimage
 from deepbrain import Extractor
 from multiprocessing import Pool
 
@@ -70,73 +71,19 @@ class Crop():
 
 
 class Resize():
-    def __init__(self,
-                 sample_data: np.ndarray,
-                 shape: Optional[Tuple[int, ...]] = None):
+    def __init__(self, sample_data: np.ndarray, shape: Optional[Tuple[int,
+                                                                      ...]]):
         self.sample_data = sample_data
         self.shape = shape
-        #By default reduce size by 40 %
-        if (shape is None):
-            dims = sample_data.ndim
-            data_shape = list()
-            for dim in range(dims):
-                scale_rate = 0.6
-                data_shape.append(int(sample_data.shape[dim] * 0.6))
-            self.shape = tuple(data_shape)
 
     def __call__(self) -> np.ndarray:
-        dim_count = self.sample_data.ndim
-        if (dim_count == 3):
-            resized_slices = []
-            new_slices = []
-            #first we need to resize invididual 2D slices
-            for idx in range(self._slice_count()):
-                _slice = self._slice(idx)
-                _slice = self._resize_2D(_slice, self.shape[:-1])
-                resized_slices.append(_slice)
-
-            #https://www.youtube.com/watch?v=lqhMTkouBx0
-            chunk_size = math.ceil(self._slice_count() / self.shape[-1])
-            for slice_chunk in self._chunks(resized_slices, chunk_size):
-                slice_chunk = list(map(self._mean, zip(*slice_chunk)))
-                new_slices.append(slice_chunk)
-
-            if (len(new_slices) == self.shape[-1] - 1):
-                new_slices.append(new_slices[-1])
-            if (len(new_slices) == self.shape[-1] - 2):
-                new_slices.append(new_slices[-1])
-                new_slices.append(new_slices[-1])
-
-            if (len(new_slices) == self.shape[-1] + 2):
-                new_val = list(
-                    map(
-                        self._mean,
-                        zip(*[
-                            new_slices[self.shape[-1] -
-                                       1], new_slices[self.shape[-1]]
-                        ])))
-                del new_slices[self.shape[-1]]
-                new_slices[self.shape[-1] - 1] = new_val
-            if (len(new_slices) == self.shape[-1] + 2):
-                new_val = list(
-                    map(
-                        self._mean,
-                        zip(*[
-                            new_slices[self.shape[-1] -
-                                       1], new_slices[self.shape[-1]]
-                        ])))
-                del new_slices[self.shape[-1]]
-                new_slices[self.shape[-1] - 1] = new_val
-
-            sample_data = np.array(new_slices).reshape((self.shape))
-
-        elif (dim_count == 2):
-            sample_data = self._resize_2D(self.sample_data, self.shape)
-        else:
-            raise ValueError(
-                f'Unexpected data shape. Resize of 2D and 3D supported only.\nCurrent number of dimensions: {dims}'
-            )
-        return sample_data
+        dims = self.sample_data.ndim
+        print(self.sample_data.shape)
+        self.sample_data = skimage.transform.resize(self.sample_data,
+                                                    self.shape,
+                                                    order=dims)
+        print(self.sample_data.shape)
+        return self.sample_data
 
     def _chunks(self, l: list, n: int):
         for i in range(0, len(l), n):
