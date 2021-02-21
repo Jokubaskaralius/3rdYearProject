@@ -54,15 +54,19 @@ class Crop():
 
     def __call__(self) -> np.ndarray:
         dims = self.sample_data.ndim
+        crop_dim_idx = []
         for dim in range(dims):
-            crop_dim_idx = []
-            for idx, item in enumerate(np.rollaxis(self.sample_data, dim)):
-
-                is_all_zero = not np.any(item)
-                if is_all_zero:
+            for idx, s in enumerate(self.sample_data):
+                is_all_zero = s < 0.1
+                if (np.all(is_all_zero)):
                     crop_dim_idx.append(idx)
-            sample_data = np.delete(self.sample_data, crop_dim_idx, axis=dim)
-        return sample_data
+
+            self.sample_data = np.delete(self.sample_data, crop_dim_idx, 0)
+            crop_dim_idx.clear()
+
+            self.sample_data = np.moveaxis(self.sample_data, 0, -1)
+
+        return self.sample_data
 
 
 class Resize():

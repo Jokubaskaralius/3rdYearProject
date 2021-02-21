@@ -219,13 +219,13 @@ def show_slices(slices):
 
 
 def visualizeImage():
-    processed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/_5_3d_spgr_volume_processed.nii.gz"
-    unprocessed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/00002/T1-axial/_5_3d_spgr_volume.nii.gz"
+    processed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/nifti_TCGA_LGG/TCGA-FG-A6J1/T1-axial/19_t1_mprage_ax_gd_processed.nii.gz"
+    unprocessed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/nifti_TCGA_LGG/TCGA-FG-A6J1/T1-axial/19_t1_mprage_ax_gd.nii.gz"
 
     dataset_manager = DatasetManager([
         [FeatureScaling, ["MM"]],
-        [Crop, []],
-        #[SkullStrip, []],  #[Resize, [(50, 50, 10)]],
+        #[SkullStrip, []],
+        [Crop, []],  #[Resize, [(50, 50, 10)]],
         #[ToTensor, []]
     ])
     dataset_manager.process_image(unprocessed_image_path)
@@ -239,13 +239,13 @@ def visualizeImage():
     print("Processed image shape", data_proc.shape)
     print("Unprocessed image shape", data_unproc.shape)
 
-    slice_0_proc = data_proc[128, :, :]
-    slice_1_proc = data_proc[:, 128, :]
-    slice_2_proc = data_proc[:, :, 30]
+    slice_0_proc = data_proc[83, :, :]
+    slice_1_proc = data_proc[:, 105, :]
+    slice_2_proc = data_proc[:, :, 84]
 
     slice_0_unproc = data_unproc[128, :, :]
     slice_1_unproc = data_unproc[:, 128, :]
-    slice_2_unproc = data_unproc[:, :, 30]
+    slice_2_unproc = data_unproc[:, :, 96]
 
     show_slices([slice_0_proc, slice_1_proc, slice_2_proc])
     plt.suptitle("Center slices for processed MRI image")
@@ -258,5 +258,5 @@ def visualizeImage():
     plt.show()
 
 
-#visualizeImage()
+visualizeImage()
 #debug()
