@@ -48,6 +48,51 @@ class logisticRegression(nn.Module):
         return self.act(self.linear(xb))
 
 
+#https://pubmed.ncbi.nlm.nih.gov/23645344/
+#https://ieeexplore.ieee.org/document/6149937
+#https://link.springer.com/article/10.1186/s40537-019-0263-7?shared-article-renderer
+# pyramid kernel https://arxiv.org/pdf/1907.02413.pdf
+class CNNModel(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super(CNNModel, self).__init__()
+        self.conv_layer1 = self._conv3D(1, 32)
+        self.conv_layer2 = self._conv3D(32, 64)
+        self.fc1 = nn.Linear(406272, 128)
+        self.fc2 = nn.Linear(128, 4)
+        self.relu = nn.LeakyReLU()
+        self.softmax = nn.Softmax()
+        self.batch = nn.BatchNorm1d(128)
+        self.drop = nn.Dropout(p=0.15)
+
+    def _conv3D(self, in_c, out_c):
+        conv_layer = nn.Sequential(
+            nn.Conv3d(in_c, out_c, kernel_size=(3, 3, 3), padding=0),
+            nn.LeakyReLU(),
+            nn.MaxPool3d((2, 2, 2), padding=0),
+        )
+        return conv_layer
+
+    def _fc(self, in_c, out_c):
+        conv_layer = nn.Sequential(
+            nn.Conv3d(in_c, out_c, kernel_size=(3, 3, 3), padding=0),
+            nn.LeakyReLU(),
+            nn.MaxPool3d((2, 2, 2)),
+        )
+        return conv_layer
+
+    def forward(self, x):
+        out = self.conv_layer1(x)
+        out = self.conv_layer2(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc1(out)
+        out = self.relu(out)
+        out = self.batch(out)
+        out = self.drop(out)
+        out = self.fc2(out)
+
+        return out
+
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
     def __init__(self, name, fmt=':f'):

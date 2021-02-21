@@ -1,0 +1,12 @@
+{
+    "batch_size": 2,
+    "num_workers": 4,
+    "shuffle": "True",
+    "k_folds": 4,
+    "model": "CNN",
+    "optimizer": "ADAM",
+    "learning_rate": 0.00001,
+    "epoch_num": 3,
+    "loss_func": "CEL"
+
+}

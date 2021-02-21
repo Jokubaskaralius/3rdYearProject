@@ -1,17 +1,49 @@
-__all__ = ['ToTensor', 'FeatureScaling', 'Crop', 'Resize', 'SkullStrip']
+__all__ = [
+    'ToTensor', 'FeatureScaling', 'Crop', 'Resize', 'GaussianBlur',
+    'SkullStrip', 'Registration'
+]
 
 import math
 import numpy as np
 import torch
 from typing import Callable, Tuple, Any, Optional
 import cv2
+import nibabel as nib
+import skimage
+from skimage import filters
 from deepbrain import Extractor
 from multiprocessing import Pool
+from dipy.align import (affine_registration, center_of_mass, translation,
+                        rigid, affine, register_dwi_to_template)
+from dipy.viz import regtools
+
+
+class TransformManager:
+    def __init__(self, config):
+        self.transform_str = config["transforms"]
+        self.transforms_map = {
+            "ToTensor": ToTensor,
+            "FeatureScaling": FeatureScaling,
+            "Crop": Crop,
+            "Resize": Resize,
+            "GaussianBlur": GaussianBlur,
+            "SkullStrip": SkullStrip,
+            "Registration": Registration
+        }
+
+    def transforms(self):
+        transforms = list()
+        for transform in self.transform_str:
+            transform_name = transform[0]
+            transform_args = transform[1]
+            transform_func = self.transforms_map[transform_name]
+            transforms.append([transform_func, transform_args])
+        return transforms
 
 
 class ToTensor():
-    def __init__(self, sample_data: np.ndarray):
-        self.sample_data = sample_data
+    def __init__(self, sample: Tuple):
+        self.sample_data, self.sample_affine, self.sample_header = sample
 
     def __call__(self) -> torch.Tensor:
         sample_data = torch.from_numpy(self.sample_data)
@@ -19,8 +51,8 @@ class ToTensor():
 
 
 class FeatureScaling():
-    def __init__(self, sample_data: np.ndarray, method: Optional[str] = "MN"):
-        self.sample_data = sample_data
+    def __init__(self, sample: Tuple, method: Optional[str] = "MN"):
+        self.sample_data, self.sample_affine, self.sample_header = sample
         if (method == "MN" or method == "ZSN" or method == "MM"):
             self.method = method
         else:
@@ -45,12 +77,13 @@ class FeatureScaling():
             std = np.std(self.sample_data)
             sample_data_0_mean = np.subtract(self.sample_data, mean)
             sample_data = np.divide(sample_data_0_mean, std)
+
         return sample_data
 
 
 class Crop():
-    def __init__(self, sample_data: np.ndarray):
-        self.sample_data = sample_data
+    def __init__(self, sample: Tuple):
+        self.sample_data, self.sample_affine, self.sample_header = sample
 
     def __call__(self) -> np.ndarray:
         dims = self.sample_data.ndim
@@ -70,73 +103,17 @@ class Crop():
 
 
 class Resize():
-    def __init__(self,
-                 sample_data: np.ndarray,
-                 shape: Optional[Tuple[int, ...]] = None):
-        self.sample_data = sample_data
+    def __init__(self, sample: Tuple, shape: Optional[Tuple[int, ...]]):
+        self.sample_data, self.sample_affine, self.sample_header = sample
         self.shape = shape
-        #By default reduce size by 40 %
-        if (shape is None):
-            dims = sample_data.ndim
-            data_shape = list()
-            for dim in range(dims):
-                scale_rate = 0.6
-                data_shape.append(int(sample_data.shape[dim] * 0.6))
-            self.shape = tuple(data_shape)
 
     def __call__(self) -> np.ndarray:
-        dim_count = self.sample_data.ndim
-        if (dim_count == 3):
-            resized_slices = []
-            new_slices = []
-            #first we need to resize invididual 2D slices
-            for idx in range(self._slice_count()):
-                _slice = self._slice(idx)
-                _slice = self._resize_2D(_slice, self.shape[:-1])
-                resized_slices.append(_slice)
+        dims = self.sample_data.ndim
+        self.sample_data = skimage.transform.resize(self.sample_data,
+                                                    self.shape,
+                                                    order=dims)
 
-            #https://www.youtube.com/watch?v=lqhMTkouBx0
-            chunk_size = math.ceil(self._slice_count() / self.shape[-1])
-            for slice_chunk in self._chunks(resized_slices, chunk_size):
-                slice_chunk = list(map(self._mean, zip(*slice_chunk)))
-                new_slices.append(slice_chunk)
-
-            if (len(new_slices) == self.shape[-1] - 1):
-                new_slices.append(new_slices[-1])
-            if (len(new_slices) == self.shape[-1] - 2):
-                new_slices.append(new_slices[-1])
-                new_slices.append(new_slices[-1])
-
-            if (len(new_slices) == self.shape[-1] + 2):
-                new_val = list(
-                    map(
-                        self._mean,
-                        zip(*[
-                            new_slices[self.shape[-1] -
-                                       1], new_slices[self.shape[-1]]
-                        ])))
-                del new_slices[self.shape[-1]]
-                new_slices[self.shape[-1] - 1] = new_val
-            if (len(new_slices) == self.shape[-1] + 2):
-                new_val = list(
-                    map(
-                        self._mean,
-                        zip(*[
-                            new_slices[self.shape[-1] -
-                                       1], new_slices[self.shape[-1]]
-                        ])))
-                del new_slices[self.shape[-1]]
-                new_slices[self.shape[-1] - 1] = new_val
-
-            sample_data = np.array(new_slices).reshape((self.shape))
-
-        elif (dim_count == 2):
-            sample_data = self._resize_2D(self.sample_data, self.shape)
-        else:
-            raise ValueError(
-                f'Unexpected data shape. Resize of 2D and 3D supported only.\nCurrent number of dimensions: {dims}'
-            )
-        return sample_data
+        return self.sample_data
 
     def _chunks(self, l: list, n: int):
         for i in range(0, len(l), n):
@@ -158,9 +135,20 @@ class Resize():
         return sample_data
 
 
+class GaussianBlur():
+    def __init__(self, sample: Tuple, sigma: Optional[float] = 0):
+        self.sample_data, self.sample_affine, self.sample_header = sample
+        self.sigma = sigma
+
+    def __call__(self):
+        # Scikit image gaussian blur
+        self.sample_data = filters.gaussian(self.sample_data, sigma=self.sigma)
+        return self.sample_data
+
+
 class SkullStrip():
-    def __init__(self, sample_data: np.ndarray):
-        self.sample_data = sample_data
+    def __init__(self, sample: Tuple):
+        self.sample_data, self.sample_affine, self.sample_header = sample
 
     def __call__(self) -> np.ndarray:
         with Pool(1) as p:
@@ -176,3 +164,40 @@ class SkullStrip():
         ext = Extractor()
         prob = ext.run(self.sample_data)
         return prob
+
+
+class Registration():
+    def __init__(self, sample: Tuple, static_path: Optional[str]):
+        if not isinstance(static_path, str):
+            raise TypeError("Expected str; got %s" %
+                            type(static_path).__name__)
+        if not static_path:
+            raise ValueError("Expected %s str; got empty str" %
+                             os.path.basename(__file__))
+
+        self.static_path = static_path
+        self._static_sample()
+        self.sample_data, self.sample_affine, self.sample_header = sample
+        self.pipeline = [center_of_mass, translation, rigid, affine]
+
+    def __call__(self):
+        xformed_img, reg_affine = affine_registration(
+            self.sample_data,  # moving image data
+            self.static_data,  # static or template image data
+            moving_affine=self.sample_affine,
+            static_affine=self.static_affine,
+            nbins=32,
+            metric='MI',
+            pipeline=self.pipeline,
+            level_iters=[10000, 1000, 100],
+            sigmas=[3.0, 1.0, 0.0],
+            factors=[4, 2, 1])
+
+        return xformed_img
+
+    def _static_sample(self):
+        sample = nib.load(self.static_path)
+        self.static_data = sample.get_fdata(dtype=np.float32)
+        self.static_header = sample.header
+        #look into getting affine.
+        self.static_affine = self.static_header.get_best_affine()

@@ -5,8 +5,13 @@ import nibabel as nib
 from skimage.transform import resize
 from matplotlib import cm
 import matplotlib.pyplot as plt
+import matplotlib.pylab as pl
+from matplotlib.colors import ListedColormap
 from mpl_toolkits.mplot3d import Axes3D
-from DatasetManager import DatasetManager
+import plotly.graph_objects as go
+import plotly.express as px
+from dataset import DatasetManager
+from utils import *
 from transforms import *
 
 
@@ -204,12 +209,6 @@ def dataset_pixel_intensity():
                                   unprocessed_data=unprocessed_data)
 
 
-def debug():
-    dataset_manager = DatasetManager([[Resize, [(50, 50, 10)]]])
-    dataset_manager.process_images()
-    dataset_plot_3D()
-
-
 #https://nipy.org/nibabel/coordinate_systems.html
 def show_slices(slices):
     #Function to display row of image slices
@@ -218,16 +217,14 @@ def show_slices(slices):
         axes[i].imshow(slice.T, cmap="gray", origin="lower")
 
 
-def visualizeImage():
-    processed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/nifti_TCGA_LGG/TCGA-FG-A6J1/T1-axial/19_t1_mprage_ax_gd_processed.nii.gz"
-    unprocessed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/nifti_TCGA_LGG/TCGA-FG-A6J1/T1-axial/19_t1_mprage_ax_gd.nii.gz"
+def visualizeImage2D():
+    processed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/sub-PAT08/T1-axial/sub-PAT08_ses_ch-preop_T1w_processed.nii.gz"
+    unprocessed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/sub-PAT08/T1-axial/sub-PAT08_ses_ch-preop_T1w.nii.gz"
 
-    dataset_manager = DatasetManager([
-        [FeatureScaling, ["MM"]],
-        #[SkullStrip, []],
-        [Crop, []],  #[Resize, [(50, 50, 10)]],
-        #[ToTensor, []]
-    ])
+    config = json.load(open("./config.json"))
+    path_manager = PathManager(config["pathManager"])
+
+    dataset_manager = DatasetManager(config["datasetManager"], path_manager)
     dataset_manager.process_image(unprocessed_image_path)
 
     img_proc = nib.load(processed_image_path)
@@ -239,13 +236,23 @@ def visualizeImage():
     print("Processed image shape", data_proc.shape)
     print("Unprocessed image shape", data_unproc.shape)
 
-    slice_0_proc = data_proc[83, :, :]
-    slice_1_proc = data_proc[:, 105, :]
-    slice_2_proc = data_proc[:, :, 84]
+    # # resizing
+    # slice_0_proc = data_proc[50, :, :]
+    # slice_1_proc = data_proc[:, 50, :]
+    # slice_2_proc = data_proc[:, :, 28]
 
-    slice_0_unproc = data_unproc[128, :, :]
+    # slice demo for cropping
+    # slice_0_proc = data_proc[80, :, :]
+    # slice_1_proc = data_proc[:, 93, :]
+    # slice_2_proc = data_proc[:, :, 95]
+
+    slice_0_proc = data_proc[80, :, :]
+    slice_1_proc = data_proc[:, 128, :]
+    slice_2_proc = data_proc[:, :, 128]
+
+    slice_0_unproc = data_unproc[80, :, :]
     slice_1_unproc = data_unproc[:, 128, :]
-    slice_2_unproc = data_unproc[:, :, 96]
+    slice_2_unproc = data_unproc[:, :, 128]
 
     show_slices([slice_0_proc, slice_1_proc, slice_2_proc])
     plt.suptitle("Center slices for processed MRI image")
@@ -258,5 +265,63 @@ def visualizeImage():
     plt.show()
 
 
-visualizeImage()
-#debug()
+#visualizeImage2D()
+
+
+#https://stackoverflow.com/questions/37327308/add-alpha-to-an-existing-matplotlib-colormap
+#https://stackoverflow.com/questions/14995610/how-to-make-a-4d-plot-with-matplotlib-using-arbitrary-data
+def visualizeImage3D():
+    processed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/nifti_TCGA_LGG/TCGA-FG-A6J1/T1-axial/19_t1_mprage_ax_gd_processed.nii.gz"
+    unprocessed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/nifti_TCGA_LGG/TCGA-FG-A6J1/T1-axial/19_t1_mprage_ax_gd.nii.gz"
+
+    plot = Plot3D()
+
+    dataset_manager = DatasetManager([
+        [FeatureScaling, ["MM"]],
+        [Crop, []],
+        [Resize, [(50, 50, 26)]],
+        [GaussianBlur, []],
+        [SkullStrip, []],
+        #[ToTensor, []]
+    ])
+    dataset_manager.process_image(unprocessed_image_path)
+
+    img_proc = nib.load(processed_image_path)
+    img_unproc = nib.load(unprocessed_image_path)
+
+    data_proc = img_proc.get_fdata()
+    data_unproc = img_unproc.get_fdata()
+
+    x = []
+    y = []
+    z = []
+    c = []
+    for sur in range(data_proc.shape[0]):
+        for row in range(data_proc.shape[1]):
+            for col in range(data_proc.shape[2]):
+                x.append(sur)
+                y.append(row)
+                z.append(col)
+                c.append(data_proc[sur][row][col])
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Choose colormap
+    cmap = pl.cm.RdBu
+
+    # Get the colormap colors
+    my_cmap = cmap(np.arange(cmap.N))
+
+    # Set alpha
+    my_cmap[:, -1] = np.linspace(0, 1, cmap.N)
+
+    # Create new colormap
+    my_cmap = ListedColormap(my_cmap)
+
+    img = ax.scatter(x, y, z, c=c, cmap=my_cmap)
+    fig.colorbar(img)
+    plt.show()
+
+
+#visualizeImage3D()

@@ -1,0 +1,39 @@
+{
+    "verbose": "True",
+    "seed": 42,
+
+    "pathManager": {
+        "data_dir_name": "data",
+        "visuals_dir_name": "visuals",
+        "data_class_name": "grade",
+        "modalities": ["T1-axial"],
+        "image_extension": ".nii.gz",
+        "proc_append_str": "_processed"
+    },
+
+    "datasetManager": {
+        "test":"test"
+    },
+
+    "transformManager": {
+        "transforms":[["FeatureScaling", ["MM"]],
+                      ["Crop", []],
+                      ["Resize", [[100, 100, 56]]],
+                      ["SkullStrip", []],
+                      ["GaussianBlur", []]
+                     ]
+    },
+
+    "trainer": {
+        "use_GPU": "True",
+        "save_model": "True",
+        "saved_model_filename": "model.pt",
+        "training_error_filename": "trainingLoss",
+        "validation_error_filename": "validationLoss"
+    },
+
+    "tester": {
+        "use_GPU": "True"
+    }
+
+}
