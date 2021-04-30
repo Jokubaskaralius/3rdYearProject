@@ -221,10 +221,20 @@ def visualizeImage2D():
     processed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/sub-PAT08/T1-axial/sub-PAT08_ses_ch-preop_T1w_processed.nii.gz"
     unprocessed_image_path = "/home/jokubas/DevWork/3rdYearProject/data/grade1/sub-PAT08/T1-axial/sub-PAT08_ses_ch-preop_T1w.nii.gz"
 
+<<<<<<< HEAD
     config = json.load(open("./config.json"))
     path_manager = PathManager(config["pathManager"])
 
     dataset_manager = DatasetManager(config["datasetManager"], path_manager)
+=======
+    dataset_manager = DatasetManager([
+        [FeatureScaling, ["MM"]],
+        [Crop, []],
+        [Resize, [(100, 100, 56)]],
+        #[SkullStrip, []],
+        #[ToTensor, []]
+    ])
+>>>>>>> 31a0a968e1c33e2e3301755ae2551edaa31534c4
     dataset_manager.process_image(unprocessed_image_path)
 
     img_proc = nib.load(processed_image_path)
@@ -236,6 +246,7 @@ def visualizeImage2D():
     print("Processed image shape", data_proc.shape)
     print("Unprocessed image shape", data_unproc.shape)
 
+<<<<<<< HEAD
     # # resizing
     # slice_0_proc = data_proc[50, :, :]
     # slice_1_proc = data_proc[:, 50, :]
@@ -245,6 +256,16 @@ def visualizeImage2D():
     # slice_0_proc = data_proc[80, :, :]
     # slice_1_proc = data_proc[:, 93, :]
     # slice_2_proc = data_proc[:, :, 95]
+=======
+    slice_0_proc = data_proc[50, :, :]
+    slice_1_proc = data_proc[:, 50, :]
+    slice_2_proc = data_proc[:, :, 28]
+
+    # slice demo for cropping
+    # slice_0_proc = data_proc[83, :, :]
+    # slice_1_proc = data_proc[:, 105, :]
+    # slice_2_proc = data_proc[:, :, 84]
+>>>>>>> 31a0a968e1c33e2e3301755ae2551edaa31534c4
 
     slice_0_proc = data_proc[80, :, :]
     slice_1_proc = data_proc[:, 128, :]
