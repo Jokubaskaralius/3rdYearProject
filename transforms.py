@@ -8,13 +8,9 @@ import numpy as np
 import torch
 from typing import Callable, Tuple, Any, Optional
 import cv2
-<<<<<<< HEAD
 import nibabel as nib
 import skimage
 from skimage import filters
-=======
-import skimage
->>>>>>> 31a0a968e1c33e2e3301755ae2551edaa31534c4
 from deepbrain import Extractor
 from multiprocessing import Pool
 from dipy.align import (affine_registration, center_of_mass, translation,
@@ -107,30 +103,16 @@ class Crop():
 
 
 class Resize():
-<<<<<<< HEAD
     def __init__(self, sample: Tuple, shape: Optional[Tuple[int, ...]]):
         self.sample_data, self.sample_affine, self.sample_header = sample
-=======
-    def __init__(self, sample_data: np.ndarray, shape: Optional[Tuple[int,
-                                                                      ...]]):
-        self.sample_data = sample_data
->>>>>>> 31a0a968e1c33e2e3301755ae2551edaa31534c4
         self.shape = shape
 
     def __call__(self) -> np.ndarray:
         dims = self.sample_data.ndim
-<<<<<<< HEAD
         self.sample_data = skimage.transform.resize(self.sample_data,
                                                     self.shape,
                                                     order=dims)
 
-=======
-        print(self.sample_data.shape)
-        self.sample_data = skimage.transform.resize(self.sample_data,
-                                                    self.shape,
-                                                    order=dims)
-        print(self.sample_data.shape)
->>>>>>> 31a0a968e1c33e2e3301755ae2551edaa31534c4
         return self.sample_data
 
     def _chunks(self, l: list, n: int):
