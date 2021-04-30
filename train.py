@@ -3,375 +3,251 @@ import random
 import json
 import numpy as np
 import torch
+from typing import Dict, Any
 from torch import optim
 from torch.autograd import Variable
 from sklearn.model_selection import StratifiedKFold, KFold
 
-from utils import to_bool
+from utils import *
 from dataset import DatasetManager, Dataset
-from models import CNNModel
-from transforms import *
+from models import CNNModel, Selector
+from transforms import TransformManager
 from visualize import Visualize
 
 
 class Trainer:
-    def __init__(self):
-        self.device = device
-        self.model = Model
-        self.optimizer = optim
-        self.data_loader = data_loader
-        self.loss_func = loss_func
+    def __init__(self, dataset, config, hyper_param, export_path: str):
+        self.dataset = dataset
+        self._load_config(config)
+        self._load_param(hyper_param)
+        self._device()
+        self._model(hyper_param)
+        self.kfold = StratifiedKFold(n_splits=self.k_folds,
+                                     shuffle=self.shuffle)
+        self.training_cost = 0.0
+        self.validation_cost = 0.0
+
+        self.export_path = export_path
 
     def train(self):
-        epoch_loss = 0.0
-        loss_func = torch.nn.CrossEntropyLoss()
-        # Training
+        verbosePrint(f'Training start')
+        verbosePrint('--------------------------------')
+        for epoch in range(self.epoch_num):
+            fold_total_training_cost = 0.0
+            fold_total_validation_cost = 0.0
+            for fold, (train_ids, validation_ids) in enumerate(
+                    self.kfold.split(torch.zeros(self.dataset.__len__()),
+                                     self.dataset._labels())):
+                verbosePrint(f'FOLD {fold}')
+                verbosePrint('--------------------------------')
+
+                train_subsampler = torch.utils.data.SubsetRandomSampler(
+                    train_ids)
+                validation_subsampler = torch.utils.data.SubsetRandomSampler(
+                    validation_ids)
+
+                train_loader = torch.utils.data.DataLoader(
+                    self.dataset,
+                    **self._training_kwargs(),
+                    sampler=train_subsampler)
+                validation_loader = torch.utils.data.DataLoader(
+                    self.dataset,
+                    **self._validation_kwargs(),
+                    sampler=validation_subsampler)
+
+                fold_training_cost = self.train_step(train_loader)
+                fold_validation_cost = self.validation_step(validation_loader)
+
+                verbosePrint("training cost: ", fold_training_cost)
+                verbosePrint("validation cost: ", fold_validation_cost)
+
+                fold_total_training_cost = fold_total_training_cost + fold_training_cost
+                fold_total_validation_cost = fold_total_validation_cost + fold_validation_cost
+
+            verbosePrint("<><><><><><><><><><><><><><><><><><><>")
+            verbosePrint(f'\nTOTAL')
+            # Compute final Training and Validation error per all folds for single epoch
+            self.training_cost = fold_total_training_cost / self.k_folds
+            self.validation_cost = fold_total_validation_cost / self.k_folds
+            self.epoch = epoch
+
+            verbosePrint("training cost: ", self.training_cost)
+            verbosePrint("validation cost: ", self.validation_cost)
+
+            # Export Learning Curve data
+            self._export_data(self._training_error(), self.export_path,
+                              self.export_t_e_filename)
+            self._export_data(self._validation_error(), self.export_path,
+                              self.export_v_e_filename)
+            verbosePrint("<><><><><><><><><><><><><><><><><><><>")
+
+        verbosePrint(f'Training end')
+        verbosePrint('--------------------------------')
+
+        self._save_model()
+        verbosePrint(f'Model: "{self.saved_model_filename}" saved.')
+        verbosePrint('--------------------------------')
+
+    def train_step(self, data_loader):
+        fold_loss = 0.0
         for local_batch, local_labels in data_loader:
-            # Transfer to GPU
             local_batch, local_labels = local_batch.to(
-                device), local_labels.to(device)
+                self.device), local_labels.to(
+                    self.device)  # Transfer batch to GPU if GPU available
 
             #local_batch = torch.reshape(local_batch, (len(local_batch), input_dim))
             local_batch = local_batch.view(len(local_batch), 1, 100, 100, 56)
             local_labels = torch.max(local_labels, 1)[1]
 
             # Model computations
-            labels_predicted = model(local_batch)
-            loss = loss_func(labels_predicted, local_labels).to(device)
+            labels_predicted = self.model(local_batch).to(self.device)
+            loss = self.loss_func(labels_predicted,
+                                  local_labels).to(self.device)
             loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+            self.optimizer.step()
+            self.optimizer.zero_grad()
 
             # Cost per Epoch
             batch_loss = labels_predicted.shape[0] * loss.item()
-            epoch_loss = epoch_loss + batch_loss
+            fold_loss = fold_loss + batch_loss
 
-        epoch_cost = epoch_loss / len(data_loader)
-        return epoch_cost
+        fold_cost = fold_loss / len(data_loader)
+        return fold_cost
 
-    def validate(self):
-        epoch_loss = 0.0
+    def validation_step(self, data_loader):
+        fold_loss = 0.0
         matching_matrix = torch.zeros([4, 4], dtype=torch.int32)
         confusion_matrix = torch.zeros([4, 4], dtype=torch.int32)
         performance_matrix = torch.zeros([4, 4], dtype=torch.float32)
 
-        loss_func = torch.nn.CrossEntropyLoss()
         with torch.set_grad_enabled(False):
             for local_batch, local_labels in data_loader:
-                # Transfer to GPU
                 local_batch, local_labels = local_batch.to(
-                    device), local_labels.to(device)
+                    self.device), local_labels.to(
+                        self.device)  # Transfer to GPU
 
-                # local_batch = torch.reshape(local_batch,
-                #                             (len(local_batch), input_dim))
                 local_batch = local_batch.view(len(local_batch), 1, 100, 100,
                                                56)
                 local_labels = torch.max(local_labels, 1)[1]
 
                 # Model computations
-                labels_predicted = model(local_batch).to(device)
-                loss = loss_func(labels_predicted, local_labels).to(device)
-
-                matching_matrix = populate_matching_matrix(
-                    labels_predicted, local_labels, matching_matrix)
-
+                labels_predicted = self.model(local_batch).to(self.device)
+                loss = self.loss_func(labels_predicted,
+                                      local_labels).to(self.device)
                 # Cost per Epoch
                 batch_loss = labels_predicted.shape[0] * loss.item()
-                epoch_loss = epoch_loss + batch_loss
+                fold_loss = fold_loss + batch_loss
 
-            confusion_matrix = populate_confusion_matrix(
-                matching_matrix, confusion_matrix)
+            fold_cost = fold_loss / len(data_loader)
+        return fold_cost
 
-            performance_matrix = derive_performance_measures(
-                confusion_matrix, performance_matrix)
+    def _load_config(self, config):
+        self.use_GPU = to_bool(config["use_GPU"])
+        self.save_model = to_bool(config["save_model"])
+        self.saved_model_filename = config["saved_model_filename"]
+        self.export_t_e_filename = config["training_error_filename"]
+        self.export_v_e_filename = config["validation_error_filename"]
 
-            epoch_cost = epoch_loss / len(data_loader)
-        return matching_matrix, confusion_matrix, performance_matrix, epoch_cost
+    def _load_param(self, hyper_param):
+        self.batch_size = hyper_param["batch_size"]
+        self.num_workers = hyper_param["num_workers"]
+        self.shuffle = to_bool(hyper_param["shuffle"])
 
+        self.epoch_num = hyper_param["epoch_num"]
+        self.k_folds = hyper_param["k_folds"]
 
-def populate_matching_matrix(labels_predicted, true_labels, matching_matrix):
-    predicted_class = torch.argmax(labels_predicted, dim=1)
-    for idx, item in enumerate(predicted_class):
-        matching_matrix[predicted_class[idx]][true_labels[
-            idx]] = matching_matrix[predicted_class[idx]][true_labels[idx]] + 1
-    return matching_matrix
+        self.model = hyper_param["model"]
+        self.optimizer = hyper_param["optimizer"]
+        self.lr = hyper_param["learning_rate"]
+        self.loss_func = hyper_param["loss_func"]
 
+    def _device(self) -> bool:
+        use_cuda = torch.cuda.is_available() and self.use_GPU
+        self.device = torch.device("cuda:0" if use_cuda else "cpu")
+        return use_cuda
 
-# matrix - [[tp0, tn0, fp0, fn0], [tp1, tn1, fp1, fn1], ....]
-def populate_confusion_matrix(matching_matrix, confusion_matrix):
-    for idx_row, row in enumerate(matching_matrix):
-        #get rid of the row and column of idx_row, to find true negative values
-        tn_matrix = torch.cat(
-            [matching_matrix[0:idx_row], matching_matrix[idx_row + 1:]])
-        tn_matrix = torch.t(tn_matrix)
-        tn_matrix = torch.cat([tn_matrix[0:idx_row], tn_matrix[idx_row + 1:]])
-        tn_matrix = torch.t(tn_matrix)
+    def _model(self, hyper_param):
+        model_selector = Selector(hyper_param)
+        self.model, self.optimizer, self.loss_func = model_selector()
+        self.model.to(self.device)
+        return
 
-        #true positives
-        confusion_matrix[idx_row][0] = matching_matrix[idx_row][idx_row]
-        #true negatives
-        confusion_matrix[idx_row][1] = torch.sum(tn_matrix)
-        #false positives
-        confusion_matrix[idx_row][2] = torch.sum(
-            matching_matrix[idx_row]) - matching_matrix[idx_row][idx_row]
-        #false negatives
-        col = torch.transpose(matching_matrix, 0, 1)[idx_row]
-        confusion_matrix[idx_row][3] = torch.sum(col) - col[idx_row]
+    def _training_kwargs(self):
+        training_kwargs = {"batch_size": self.batch_size}
+        if (self._device()):
+            cuda_kwargs = {'num_workers': self.num_workers, "pin_memory": True}
+            training_kwargs.update(cuda_kwargs)
+        return training_kwargs
 
-    return confusion_matrix
+    def _validation_kwargs(self):
+        validation_kwargs = {"batch_size": self.batch_size}
+        if (self._device()):
+            cuda_kwargs = {'num_workers': self.num_workers, "pin_memory": True}
+            validation_kwargs.update(cuda_kwargs)
+        return validation_kwargs
 
+    def _training_error(self):
+        export_data = {"x": self.epoch, "y": self.training_cost}
+        return export_data
 
-def derive_performance_measures(confusion_matrix, performance_matrix):
-    for idx, item in enumerate(confusion_matrix):
-        true_positive = confusion_matrix[idx][0]
-        true_negative = confusion_matrix[idx][1]
-        false_positive = confusion_matrix[idx][2]
-        false_negative = confusion_matrix[idx][3]
+    def _validation_error(self):
+        export_data = {"x": self.epoch, "y": self.validation_cost}
+        return export_data
 
-        #Accuracy
-        accuracy = torch.true_divide(
-            true_positive + true_negative,
-            true_positive + true_negative + false_positive + false_negative)
-        performance_matrix[idx][0] = accuracy
+    @staticmethod
+    def _export_data(data: Dict, path: str, filename: str):
+        if not isinstance(data, dict):
+            raise TypeError("Expected dict; got %s" % type(params).__name__)
+        if not data:
+            raise ValueError("Expected dict; got empty dict")
 
-        #Precision
-        precision = torch.true_divide(true_positive,
-                                      true_positive + false_positive)
-        performance_matrix[idx][1] = precision
-        #Recall
-        recall = torch.true_divide(true_positive,
-                                   true_positive + false_negative)
-        performance_matrix[idx][2] = recall
-        #F1-score
-        f1_score = 2 * torch.true_divide(precision * recall,
-                                         precision + recall)
-        performance_matrix[idx][3] = f1_score
-    return performance_matrix
+        path = os.path.join(path, filename + ".json")
+        try:
+            data_json = load_JSON(path)
+            data_json.append(data)
+            export_JSON(data_json, path)
+        except:
+            export_JSON([data], path)
+        return
 
-
-def training(device, model, optimizer, data_loader, input_dim):
-    epoch_loss = 0.0
-    loss_func = torch.nn.CrossEntropyLoss()
-
-    # Training
-    for local_batch, local_labels in data_loader:
-        # Transfer to GPU
-        local_batch, local_labels = local_batch.to(device), local_labels.to(
-            device)
-
-        #local_batch = torch.reshape(local_batch, (len(local_batch), input_dim))
-        local_batch = local_batch.view(len(local_batch), 1, 100, 100, 56)
-        local_labels = torch.max(local_labels, 1)[1]
-
-        # Model computations
-        labels_predicted = model(local_batch)
-        loss = loss_func(labels_predicted, local_labels).to(device)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-
-        # Cost per Epoch
-        batch_loss = labels_predicted.shape[0] * loss.item()
-        epoch_loss = epoch_loss + batch_loss
-
-    epoch_cost = epoch_loss / len(data_loader)
-    return epoch_cost
+    def _save_model(self):
+        if (self.save_model):
+            torch.save(self.model.state_dict(), self.saved_model_filename)
 
 
-#https://medium.com/apprentice-journal/evaluating-multi-class-classifiers-12b2946e755b
-#https://www.youtube.com/watch?v=gJo0uNL-5Qw&t=343s
-def validation(device, data_loader, model, input_dim):
-    epoch_loss = 0.0
-    matching_matrix = torch.zeros([4, 4], dtype=torch.int32)
-    confusion_matrix = torch.zeros([4, 4], dtype=torch.int32)
-    performance_matrix = torch.zeros([4, 4], dtype=torch.float32)
-
-    loss_func = torch.nn.CrossEntropyLoss()
-    with torch.set_grad_enabled(False):
-        for local_batch, local_labels in data_loader:
-            # Transfer to GPU
-            local_batch, local_labels = local_batch.to(
-                device), local_labels.to(device)
-
-            # local_batch = torch.reshape(local_batch,
-            #                             (len(local_batch), input_dim))
-            local_batch = local_batch.view(len(local_batch), 1, 100, 100, 56)
-            local_labels = torch.max(local_labels, 1)[1]
-
-            # Model computations
-            labels_predicted = model(local_batch).to(device)
-            loss = loss_func(labels_predicted, local_labels).to(device)
-
-            matching_matrix = populate_matching_matrix(labels_predicted,
-                                                       local_labels,
-                                                       matching_matrix)
-
-            # Cost per Epoch
-            batch_loss = labels_predicted.shape[0] * loss.item()
-            epoch_loss = epoch_loss + batch_loss
-
-        confusion_matrix = populate_confusion_matrix(matching_matrix,
-                                                     confusion_matrix)
-
-        performance_matrix = derive_performance_measures(
-            confusion_matrix, performance_matrix)
-
-        epoch_cost = epoch_loss / len(data_loader)
-    return matching_matrix, confusion_matrix, performance_matrix, epoch_cost
-
-
-#https://datascience.stackexchange.com/questions/15989/micro-average-vs-macro-average-performance-in-a-multiclass-classification-settin/16001
-#https://www.machinecurve.com/index.php/2021/02/03/how-to-use-k-fold-cross-validation-with-pytorch/
-#https://github.com/alejandrodebus/Pytorch-Utils/blob/master/cross_validation.py
-#https://en.wikipedia.org/wiki/Cross-validation_(statistics)#Leave-one-out_cross-validation
-def main(config, hyper_param):
-    # CONFIG
-    verbose = to_bool(config["verbose"])
-    use_GPU = to_bool(config["use_GPU"])
+def main(config: Dict[str, Any], hyper_param: Dict[str, Any]):
+    # Config
     seed = config["seed"]
-    save_model = to_bool(config["save_model"])
-    saved_model_filename = config["saved_model_filename"]
-    # End of CONFIG
 
-    # HYPER_PARAMS
-    batch_size = hyper_param["batch_size"]
-    num_workers = hyper_param["num_workers"]
-    shuffle = hyper_param["shuffle"]
-    k_folds = hyper_param["k_folds"]
-    model = hyper_param["model"]
-    optimizer = hyper_param["optimizer"]
-    lr = hyper_param["learning_rate"]
-    epoch_num = hyper_param["epoch_num"]
-    loss_func = hyper_param["loss_func"]
-    # End of HYPER_PARAMS
-
-    # VERBOSE
-    if verbose:
-
-        def verbosePrint(*args):
-            for arg in args:
-                print(arg, )
-    else:
-        verbosePrint = lambda *a: None
-    # End of VERBOSE
-
-    # SEED
+    # Initial seed
+    # 1) Pytorch dataLoader
+    # 2) Numpy random
     torch.manual_seed(seed)
     np.random.seed(seed)
-    # End of SEED
 
-    # GPU / CPU device setup
-    use_cuda = torch.cuda.is_available() and use_GPU
-    device = torch.device("cuda:0" if use_cuda else "cpu")
-    torch.backends.cudnn.benchmark = True
-    # End of GPU
+    # Generate project paths
+    path_manager = PathManager(config["pathManager"])
+    export_path = path_manager.visuals_data_dir()
 
-    # Training/Validation args
-    training_kwargs = {'batch_size': batch_size}
-    validation_kwargs = training_kwargs
-    if (use_cuda):
-        cuda_kwargs = {
-            'num_workers': num_workers,
-            'shuffle': shuffle,
-            "pin_memory": True
-        }
-        training_kwargs.update(cuda_kwargs)
-        validation_kwargs.update(cuda_kwargs)
-    #
+    # Generate transforms
+    transforms_manager = TransformManager(config["transformManager"])
+    transforms = transforms_manager.transforms()
 
-    # Dataset
-    dataset_manager = DatasetManager([
-        [FeatureScaling, ["MM"]],
-        [Crop, []],
-        [Resize, [(100, 100, 56)]],
-        [SkullStrip, []],
-        #[ToTensor, []]
-    ])
+    # Pre-process dataset
+    dataset_manager = DatasetManager(config["datasetManager"], path_manager,
+                                     transforms)
     #dataset_manager.process_images()
 
+    # Form training/validation partitions
     partition = dataset_manager.partition(seed)
-    labels = dataset_manager.create_labels()
+    labels = dataset_manager.labels()
     dataset = Dataset(partition['dataset'], labels)
-    # End of Dataset
 
-    y = []
-    for item in dataset:
-        for idx, value in enumerate(item[1]):
-            if (value == 1):
-                y.append(idx)
-
-    # K-folds cross validation
-    kfold = StratifiedKFold(n_splits=k_folds,
-                            shuffle=shuffle,
-                            random_state=seed)
-    # End of K-folds
-
-    # Model
-    input_dim = torch.numel(dataset[0][0])
-    output_dim = 4
-    #model = logisticRegression(input_dim, output_dim).to(device)
-    model = CNNModel(input_dim, output_dim).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    # End of Model
-
-    visualize = Visualize()
-
-    for epoch in range(args.epoch):
-        training_cost = 0
-        validation_cost = 0
-        performance_measure_list = list()
-
-        verbosePrint(f'EPOCH {epoch+1}')
-        verbosePrint("<><><><><><><><><><><><><><><><><><><>")
-        for fold, (train_ids, validation_ids) in enumerate(
-                kfold.split(torch.zeros(len(dataset)), y)):
-            verbosePrint(f'FOLD {fold}')
-            verbosePrint('--------------------------------')
-            # Sample elements randomly from a given list of ids, no replacement.
-            train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
-            validation_subsampler = torch.utils.data.SubsetRandomSampler(
-                validation_ids)
-
-            # Define data loaders for training and testing data in this fold
-            train_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=args.batch_size, sampler=train_subsampler)
-            validation_loader = torch.utils.data.DataLoader(
-                dataset,
-                batch_size=args.batch_size,
-                sampler=validation_subsampler)
-
-            fold_training_cost = training(device, model, optimizer,
-                                          train_loader, input_dim)
-            matching_matrix, confusion_matrix, performance_matrix, fold_validation_cost = validation(
-                device, validation_loader, model, input_dim)
-
-            verbosePrint("training cost: ", fold_training_cost)
-            verbosePrint("validation cost: ", fold_validation_cost)
-
-            training_cost = training_cost + fold_training_cost
-            validation_cost = validation_cost + fold_validation_cost
-
-            performance_measure_list.append(
-                [matching_matrix, confusion_matrix, performance_matrix])
-
-        # The average training and validation costs for all folds
-        verbosePrint(f'\nTOTAL')
-        training_cost = training_cost / k_folds
-        validation_cost = validation_cost / k_folds
-        verbosePrint("training cost: ", training_cost)
-        verbosePrint("validation cost: ", validation_cost)
-        verbosePrint("<><><><><><><><><><><><><><><><><><><>")
-        visualize.trainingLoss(epoch, training_cost)
-        visualize.validationLoss(epoch, validation_cost)
-        visualize.confusionMatrix(performance_measure_list, epoch)
-        performance_measure_list.clear()
-
-# Save Model
-    if (args.save_model):
-        torch.save(model.state_dict(), "./TrainedTest.pt")
+    trainer = Trainer(dataset, config["trainer"], hyper_param, export_path)
+    trainer.train()
 
 
-# End of Save Model
+# End of Main
 
 if __name__ == "__main__":
     #Classifier training command line arguments
@@ -407,5 +283,17 @@ if __name__ == "__main__":
         raise ValueError("Expected %s dict; got empty dict" %
                          os.path.basename(__file__))
 
-    main(config["trainer"], hyper_param)
+    verbose = config["verbose"]
+    # Verbose mode
+    if verbose:
+
+        def verbosePrint(*args):
+            for arg in args:
+                print(arg, )
+    else:
+        verbosePrint = lambda *a: Nones
+
+    # Delete the visualization things..
+
+    main(config, hyper_param)
     # End of command line arguments
