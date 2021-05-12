@@ -1,11 +1,21 @@
 MRI processing pipeline
 
 File list: <br />
+
+_src_ directory: <br />
 train.py - wrapper to begin training of multi-class 3D MRI brain classifier. <br />
 dataset.py - dataset manager, for loading, processing, saving the MRI images on the filesystem <br />
 transforms.py - pre-processing transforms to apply to a MRI image <br />
 utils.py - project utilities (i.e., project path manager to manage project paths, etc.) <br />
 visualize.py - 2D and 3D visualization of MRI brain <br />
+
+_visuals_ directory: <br />
+_css_ dir: css files for confusion matrices
+_js_ dir: javascript files for confusion matrices and learning curves
+k_fold_confusionMatrix.html - confusion matrix visualization of each fold
+learningCurve.html - learning curve visualization
+modelPerformance.html - final model performance per epoch
+
 config.json - configuration file to select transforms <br />
 hyperparams.json - configuration file to select CNN parameters <br />
 
