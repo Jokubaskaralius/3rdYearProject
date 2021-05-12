@@ -3,8 +3,8 @@
     "seed": 42,
 
     "pathManager": {
-        "data_dir_name": "data",
-        "visuals_dir_name": "visuals",
+        "data_dir_name": "../data",
+        "visuals_dir_name": "../visuals",
         "data_class_name": "grade",
         "modalities": ["T1-axial"],
         "image_extension": ".nii.gz",
@@ -12,7 +12,7 @@
     },
 
     "datasetManager": {
-        "test":"test"
+        "pre-process":"False"
     },
 
     "transformManager": {

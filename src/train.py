@@ -16,12 +16,22 @@ from visualize import Visualize
 
 
 class Trainer:
+    '''
+    Trainer
+
+    Multi-class classifier trainer
+    Dataset - a list of loaded data items
+    config - config.json trainer section object
+    hyper_param - hyper parameter object in hyper_param.json
+    export_path - path to export the trainer model parameters to
+    '''
     def __init__(self, dataset, config, hyper_param, export_path: str):
         self.dataset = dataset
         self._load_config(config)
         self._load_param(hyper_param)
         self._device()
         self._model(hyper_param)
+        # K fold validation initiation
         self.kfold = StratifiedKFold(n_splits=self.k_folds,
                                      shuffle=self.shuffle)
         self.training_cost = 0.0
@@ -236,7 +246,10 @@ def main(config: Dict[str, Any], hyper_param: Dict[str, Any]):
     # Pre-process dataset
     dataset_manager = DatasetManager(config["datasetManager"], path_manager,
                                      transforms)
-    #dataset_manager.process_images()
+
+    # If configuration enabled pre-process the dataset
+    if (to_bool(config["datasetManager"]["pre-process"])):
+        dataset_manager.process_images()
 
     # Form training/validation partitions
     partition = dataset_manager.partition(seed)
@@ -292,8 +305,6 @@ if __name__ == "__main__":
                 print(arg, )
     else:
         verbosePrint = lambda *a: Nones
-
-    # Delete the visualization things..
 
     main(config, hyper_param)
     # End of command line arguments
